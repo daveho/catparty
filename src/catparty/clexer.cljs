@@ -38,11 +38,11 @@
    "while"
    ])
 
-(def c-identifier-pattern
-  [[#"^[A-Za-z_][A-Za-z0-9_]*" :identifier]])
-
 (def c-keyword-patterns
   (mapv (fn [kw] [(re-pattern (str "^" kw)) (keyword (str "kw_" kw))]) c-keywords))
+
+(def c-identifier-pattern
+  [[#"^[A-Za-z_][A-Za-z0-9_]*" :identifier]])
 
 (def c-operator-patterns
   [[#"^==" :op_eq]
