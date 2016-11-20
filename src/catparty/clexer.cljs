@@ -58,7 +58,8 @@
     ; If there are no more input lines, then set line to nil (to signal EOF)
     (empty? (:lineseq lexer)) (assoc lexer :line nil)
     ; Get the next line
-    :else (Lexer. (rest (:lineseq lexer)) (first (:lineseq lexer)) (:tok lexer))))
+    :else (let [lines (:lineseq lexer)]
+            (assoc lexer :lineseq (rest lines) :line (first lines)))))
 
 (defn recognize-token [lexer]
   ; Trim leading whitespace
