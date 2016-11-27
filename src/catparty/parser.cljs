@@ -1,6 +1,7 @@
 (ns catparty.parser
-  (:require [catparty.clexer :as clexer])
-  (:require [catparty.node :as node]))
+  (:require [catparty.clexer :as clexer]
+            [catparty.node :as node]
+            [catparty.exc :as exc]))
 
 ;; Recursive descent and precedence climbing parser routines.
 
@@ -51,12 +52,12 @@
     ; Check to see if there are more tokens
     (if (empty? token-seq)
       ; No more tokens
-      (throw (RuntimeException. "Unexpected end of input"))
+      (exc/throw-exception "Unexpected end of input")
       ; Check to see if the next token has the expected type
       (let [[lexeme token-type] (first token-seq)]
         (if (not (= token-type expected-token-type))
           ; Wrong token type seen
-          (throw (RuntimeException. (str "Expected " expected-token-type ", saw " token-type)))
+          (exc/throw-exception (str "Expected " expected-token-type ", saw " token-type))
           ; Consume the token and return a SingleParseResult
           (SingleParseResult. (node/make-node token-type lexeme) (rest token-seq)))))))
 
@@ -114,7 +115,7 @@
   (complete-production nonterminal (apply-production (initial-parse-result token-seq) rhs)))
 
 ; Get the next token from a token sequence, throwing
-; a RuntimeException if the token sequence is empty.
+; an exception if the token sequence is empty.
 ;
 ; Parameters:
 ;   token-seq - the input token sequence
@@ -124,6 +125,5 @@
 ;
 (defn next-token [token-seq]
   (if (empty? token-seq)
-    (throw (RuntimeException. "Unexpected end of input"))
+    (exc/throw-exception "Unexpected end of input")
     (first token-seq)))
-

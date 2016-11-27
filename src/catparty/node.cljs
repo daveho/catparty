@@ -1,4 +1,5 @@
-(ns minilang.node)
+(ns catparty.node
+  (:require [catparty.exc :as exc]))
 
 ; Record for parse tree, AST, and augmented AST nodes.
 ;
@@ -62,7 +63,7 @@
 ;
 (defn children [node]
   (if (not (sequential? (:value node)))
-    (throw (RuntimeException. (str "Attempt to get children of terminal node " (:symbol node))))
+    (exc/throw-exception (str "Attempt to get children of terminal node " (:symbol node)))
     (:value node)))
 
 ; Return how many children the given node has.

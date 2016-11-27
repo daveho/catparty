@@ -1,4 +1,5 @@
-(ns catparty.lexer)
+(ns catparty.lexer
+  (:require [catparty.exc :as exc]))
 
 ;; Generic lexer module.
 ;; All that language-specific lexers need to provide is a sequence
@@ -9,12 +10,9 @@
 ;;    line - current line
 ;;    tok - next token to be returned
 ;;    pats - sequence of patterns (pairs of regex and token type)
-(defrecord Lexer [lineseq line tok pats])
-
-;; Note: would need to be implemented differently in Clojure
-;; (as opposed to ClojureScript.)
-(defn throw-lexer-error [msg]
-  (throw (js/Error. msg)))
+;;    lnum - line number (starts at 1 for first line)
+;;    cnum - char number within line (starts at 1 for first character)
+(defrecord Lexer [lineseq line tok pats lnum cnum])
 
 ; Attempt to ensure that the lexer has a line available
 (defn fill-line [lexer]
@@ -25,23 +23,34 @@
     (empty? (:lineseq lexer)) (assoc lexer :line nil)
     ; Get the next line
     :else (let [lines (:lineseq lexer)]
-            (assoc lexer :lineseq (rest lines) :line (first lines)))))
+            (assoc lexer
+              :lineseq (rest lines)
+              :line (first lines)
+              :lnum (inc (:lnum lexer))
+              :cnum 1))))
 
 (defn recognize-token [lexer]
   ; Trim leading whitespace
-  (let [line (clojure.string/triml (:line lexer))]
+  (let [raw-line (:line lexer)               ; raw line before trimming leading ws
+        line (clojure.string/triml raw-line) ; line after trimming leading ws
+        ntrim (- (count raw-line) (count line)) ; number of ws characters trimmed
+        cnum (+ (:cnum lexer) ntrim)         ; character number in line of start of token
+        ]
     ; Attempt to match each token pattern in sequence
     (loop [patterns (:pats lexer)]
       ; If there are no more patterns, then the input contains an illegal token
       (if (empty? patterns)
-        (throw-lexer-error (str "Illegal token at " line))
+        (exc/throw-exception (str "Illegal token at " line))
         (let [[token-regexp token-type] (first patterns)
               match (re-find token-regexp line)]
           (if match
             ; Current pattern is a match: update lexer's line and token
             (let [match-text (if (vector? match) (get match 0) match)
                   rest-of-line (subs line (count match-text))]
-              (assoc lexer :line rest-of-line :tok [match-text token-type]))
+              (assoc lexer
+                :line rest-of-line
+                :tok [match-text token-type (:lnum lexer) cnum]
+                :cnum (+ cnum (count match-text))))
             ; Current pattern is not a match: try next pattern
             (recur (rest patterns))))))))
 
@@ -60,7 +69,7 @@
 (defn create-from-lines
   "Create a lexer from a sequence of lines and sequence of patterns."
   [lines pats]
-  (fill-token (Lexer. lines "" nil pats)))
+  (fill-token (Lexer. lines "" nil pats 0 0)))
 
 (defn create-from-string
   "Create a lexer from an input string and sequence of patterns."
