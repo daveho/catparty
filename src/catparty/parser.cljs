@@ -120,8 +120,9 @@
 ; Parameters:
 ;   token-seq - the input token sequence
 ;
-; Returns: the next token, which is a vector containing the lexeme
-; and token type, (e.g., ["foobar" :identifier])
+; Returns: the next token, which is a vector containing the lexeme,
+; token type, line number, and character number
+; (e.g., ["foobar" :identifier 5 11])
 ;
 (defn next-token [token-seq]
   (if (empty? token-seq)
