@@ -1,10 +1,13 @@
 (ns catparty.cparser
-  (:require [catparty.parser :as parser])
+  (:require [catparty.parser :as parser]
+            [catparty.lexer :as lexer]
+            [catparty.clexer :as clexer]
+            [catparty.prettyprint :as pp])
   )
 
 (defn parse-external-declaration [token-seq]
   ; FIXME: this is just a placeholder for now
-  (parser/do-production :external-declaration [(parser/expect :int_literal)] token-seq)
+  (parser/do-production :external-declaration [(parser/expect :dec_literal)] token-seq)
   )
 
 (defn parse-translation-unit [token-seq]
@@ -23,4 +26,13 @@
                                   (parser/apply-production pr [parse-translation-unit]))
       )
   ))
+
+
+(defn parse [token-seq]
+  (:node (parse-translation-unit token-seq)))
+
+;; Just for testing...
+
+(def testprog "1 2\n3 4")
+(def t (parse (lexer/token-sequence (clexer/create-from-string testprog))))
 
