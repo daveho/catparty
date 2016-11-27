@@ -1,13 +1,26 @@
 (ns catparty.prettyprint)
 
 ; ------------------------------------------------------------
-; Pretty printing the parse tree
+; Pretty printing the parse tree or AST
 ; ------------------------------------------------------------
 
-(defn node-to-string [node]
-  (if (string? (:value node))
-    (str (:symbol node) "[\"" (:value node) "\"]")
-    (str (:symbol node))))
+; Function to nicely format any properties attached to an augmented
+; AST node.
+;
+; Parameters:
+;   n - an augmented AST node
+;
+; Returns: a formatted string describing the properties of the augmented
+; AST node.
+;
+(defn format-properties [n]
+  (let [props (:props n)]
+    (apply str (map (fn [[k v]] (str " " k "=" v)) (seq props)))))
+
+(defn node-to-string [node node-f]
+  (str (if (string? (:value node))
+         (str (:symbol node) "[\"" (:value node) "\"]")
+         (str (:symbol node))) (node-f node)))
 
 (defrecord PPItem [node children visited])
 
@@ -36,11 +49,11 @@
 ;        (print (str (:symbol node) "," (count (:children item)) "," (:visited item)))
 ;        (recur (rest items))))))
 
-(defn print-item [pp node]
+(defn print-item [pp node node-f]
   ;(print-stack (:stack pp))
   (loop [items (reverse (:stack pp))]
     (if (empty? items)
-      (println (node-to-string node))
+      (println (node-to-string node node-f))
       (let [item (first items)]
         (do
           (if (empty? (rest items))
@@ -74,7 +87,7 @@
 (defn remove-top-item [pp]
   (PP. (rest (:stack pp))))
 
-(defn pretty-print [node]
+(defn pretty-print-work [node node-f]
 ;  (let [pp (create-pretty-printer node)]
 ;    (print-item pp (:node (first (:stack pp))))))
   (loop [pp (create-pretty-printer node)]
@@ -85,7 +98,7 @@
           ; Top item hasn't been visited yet: print it, and recur with
           ; the top item marked as visited
           (do
-            (print-item (remove-top-item pp) (:node top-item))
+            (print-item (remove-top-item pp) (:node top-item) node-f)
             (recur (visit-top-item pp)))
           ; Top item has been visited.
           (if (has-remaining-children? top-item)
@@ -94,3 +107,7 @@
             (recur (schedule-child-of-top-item pp))
             ; The top item has no remaining children: recur with the stack popped.
             (recur (remove-top-item pp))))))))
+
+; Convenience function that automatically formats node properties.
+(defn pretty-print [node]
+  (pretty-print-work node format-properties))

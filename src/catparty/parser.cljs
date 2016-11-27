@@ -54,12 +54,15 @@
       ; No more tokens
       (exc/throw-exception "Unexpected end of input")
       ; Check to see if the next token has the expected type
-      (let [[lexeme token-type] (first token-seq)]
+      (let [[lexeme token-type lnum cnum] (first token-seq)]
         (if (not (= token-type expected-token-type))
           ; Wrong token type seen
           (exc/throw-exception (str "Expected " expected-token-type ", saw " token-type))
           ; Consume the token and return a SingleParseResult
-          (SingleParseResult. (node/make-node token-type lexeme) (rest token-seq)))))))
+          (SingleParseResult. (node/make-node-with-props token-type
+                                                         lexeme
+                                                         {:lnum lnum, :cnum cnum})
+                              (rest token-seq)))))))
 
 ; Apply a production (or part of a production) by expanding
 ; symbols on the right-hand side of a production.
