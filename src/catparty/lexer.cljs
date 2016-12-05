@@ -97,3 +97,63 @@
     (let [first-token (get-current-token lexer)
           advanced-lexer (consume-token lexer)]
       (cons first-token (lazy-seq (token-sequence advanced-lexer))))))
+
+; Get the next token from a token sequence, throwing
+; an exception if the token sequence is empty.
+;
+; Parameters:
+;   token-seq - the input token sequence
+;
+; Returns: the next token, which is a vector containing the lexeme,
+; token type, line number, and character number
+; (e.g., ["foobar" :identifier 5 11])
+;
+(defn next-token [token-seq]
+  (if (empty? token-seq)
+    (exc/throw-exception "Unexpected end of input")
+    (first token-seq)))
+
+; Check to see whether the next token matches the specified
+; predicate.
+;
+; Parameters:
+;   token-seq - the input token sequence
+;   pred - a token predicate
+;
+; Returns:
+;   true if there is at least one more token and the predicate
+;   returns true for the token, false otherwise
+;
+(defn next-token-matches? [token-seq pred]
+  (if (empty? token-seq)
+    false
+    (let [token (first token-seq)]
+      (pred token))))
+
+; Check to see whether the next token matches the specified
+; grammar symbol.
+;
+; Parameters:
+;   token-seq - the input token sequence
+;   symbol - a terminal symbol
+;
+; Returns:
+;   true if there is at least one more token and its symbol
+;   matches the specified terminal symbol
+;
+(defn next-token-is? [token-seq symbol]
+  (next-token-matches? token-seq (fn [[lexeme tsym]] (= tsym symbol))))
+
+; Check to see whether the next token's grammar symbol is
+; contained in the specified collection.
+;
+; Parameters:
+;   token-seq - the input token sequence
+;   coll - a collection of grammar symbols
+;
+; Returns:
+;   true if there is at least one more token and the
+;   specified collection contains its grammar symbol
+;
+(defn next-token-in? [token-seq coll]
+  (next-token-matches? token-seq (fn [[lexeme tsym]] (contains? coll tsym))))

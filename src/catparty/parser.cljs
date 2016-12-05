@@ -116,18 +116,3 @@
 ;
 (defn do-production [nonterminal rhs token-seq]
   (complete-production nonterminal (apply-production (initial-parse-result token-seq) rhs)))
-
-; Get the next token from a token sequence, throwing
-; an exception if the token sequence is empty.
-;
-; Parameters:
-;   token-seq - the input token sequence
-;
-; Returns: the next token, which is a vector containing the lexeme,
-; token type, line number, and character number
-; (e.g., ["foobar" :identifier 5 11])
-;
-(defn next-token [token-seq]
-  (if (empty? token-seq)
-    (exc/throw-exception "Unexpected end of input")
-    (first token-seq)))

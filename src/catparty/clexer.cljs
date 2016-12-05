@@ -66,6 +66,7 @@
    [#"^\*" :op_star]
    [#"^/" :op_div]
    [#"^%" :op_mod]
+   [#"^\*" :op_ast] ; not op_mul, because it also means pointer/dereference
    ]
   )
 
