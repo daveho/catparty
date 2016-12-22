@@ -1,3 +1,4 @@
+
 (ns catparty.lexer
   (:require [catparty.exc :as exc]))
 
@@ -157,3 +158,28 @@
 ;
 (defn next-token-in? [token-seq coll]
   (next-token-matches? token-seq (fn [[lexeme tsym]] (contains? coll tsym))))
+
+
+;; Predicate to test whether specified token has specified
+;; token type (symbol).
+;;
+;; Parameters:
+;;    token - a token
+;;    token-type - token type (symbol)
+;;
+;; Returns:
+;;    true if the token matches the token type, false otherwise
+(defn token-is-type? [token token-type]
+  (= (second token) token-type))
+
+
+;; Get the token type (symbol) for specified token.
+;;
+;; Parameters:
+;;   token - a token
+;;
+;; Returns:
+;;   the token type (symbol)
+;;
+(defn get-token-type [token]
+  (second token))

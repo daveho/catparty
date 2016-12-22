@@ -1,5 +1,6 @@
 (ns catparty.parser
-  (:require [catparty.clexer :as clexer]
+  (:require [catparty.lexer :as lexer]
+            [catparty.clexer :as clexer]
             [catparty.node :as node]
             [catparty.exc :as exc]))
 
@@ -36,6 +37,20 @@
 (defn initial-parse-result [token-seq]
   (ParseResult. [] token-seq))
 
+;; Create a parse node for specified token.
+;;
+;; Parameters:
+;;   token - a token
+;;
+;; Returns:
+;;   a parse node representing the token
+;;
+(defn make-terminal-node [token]
+  (let [[lexeme token-type lnum cnum] token]
+    (node/make-node-with-props token-type
+                               lexeme
+                               {:lnum lnum, :cnum cnum})))
+
 ; Create a symbol application function to expect and consume a particular
 ; type of token (i.e., a terminal symol).
 ;
@@ -53,16 +68,51 @@
     (if (empty? token-seq)
       ; No more tokens
       (exc/throw-exception "Unexpected end of input")
-      ; Check to see if the next token has the expected type
-      (let [[lexeme token-type lnum cnum] (first token-seq)]
-        (if (not (= token-type expected-token-type))
+      (let [next-token (first token-seq)]
+        ; Check whether next token matches expected token type
+        (if (not (lexer/token-is-type? next-token expected-token-type))
           ; Wrong token type seen
-          (exc/throw-exception (str "Expected " expected-token-type ", saw " token-type))
+          (exc/throw-exception (str "Expected "
+                                    expected-token-type
+                                    ", saw "
+                                    (lexer/get-token-type next-token)))
           ; Consume the token and return a SingleParseResult
-          (SingleParseResult. (node/make-node-with-props token-type
-                                                         lexeme
-                                                         {:lnum lnum, :cnum cnum})
-                              (rest token-seq)))))))
+          (SingleParseResult. (make-terminal-node next-token) (rest token-seq)))))))
+
+;; Return a SingleParseResult with a single node (labeled with
+;; specified symbol) having as children one or more terminal nodes
+;; representing tokens matched by given token predicate.
+;;
+;; Parameters:
+;;   symbol - nonterminal symbol labeling the returned parse node
+;;   token-pred - predicate function to select token(s) to add
+;;                as children of the returned parse node
+;;   token-seq - sequence of input tokens
+;;
+;; Returns:
+;;   parse node labeled with specified symbol and terminal
+;;   nodes for all matching tokens as children
+;;
+(defn accept-matching [symbol token-pred token-seq]
+  ; Function to construct the SingleParseResult with the children
+  ; and remaining tokens.
+  (let [make-result (fn [children remaining]
+                      (SingleParseResult. (node/make-node symbol children) remaining))]
+    ; Match tokens until either there are no more tokens,
+    ; or we encounter a non-matching token.
+    (loop [remaining token-seq
+           acc []]
+      (if (empty? remaining)
+        ; No more tokens, so we're done
+        (make-result acc remaining)
+        ; Get the next token
+        (let [next-tok (first remaining)]
+          (if (not (token-pred next-tok))
+            ; Next token doesn't match, so we're done
+            (make-result acc remaining)
+            ; Create a node for the matched token, add it to the accumulator,
+            ; and continue recursively.
+            (recur (rest remaining) (conj acc (make-terminal-node next-tok)))))))))
 
 ; Apply a production (or part of a production) by expanding
 ; symbols on the right-hand side of a production.
