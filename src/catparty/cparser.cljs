@@ -6,8 +6,10 @@
             [clojure.set :as set]))
 
 ;; Recursive descent parser for C.
-;; Adapted from the ANTLR C grammar:
+;; Adapted from the v3 and v4 ANTLR C grammars:
+;;    http://www.antlr3.org/grammar/1153358328744/C.g
 ;;    https://github.com/antlr/grammars-v4/blob/master/c/C.g4
+
 
 (def storage-class-specifiers
   #{:kw_typedef :kw_extern :kw_static :kw_auto :kw_register})
@@ -23,6 +25,10 @@
 ;; Set of tokens that can begin a declarator
 (def declarator-start-tokens
   #{:identifier :lparen :op_star})
+
+;; Set of tokens that can begin a declarator suffix
+(def declarator-suffix-start-tokens
+  #{:lparen :lbracket})
 
 
 (defn parse-type-qualifier-list [token-seq]
@@ -49,9 +55,55 @@
     (p/do-production :opt_pointer [] token-seq)))
 
 
-;; FIXME: just handle identifiers for now
+(declare parse-declarator)
+
+
+(defn parse-direct-declarator-base [token-seq]
+  ; direct-declarator-base -> identifier
+  ; direct-declarator-base -> '(' declarator ')'
+  (if (l/next-token-is? token-seq :identifier)
+    (p/do-production :direct_declarator_base [(p/expect :identifier)] token-seq)
+    (p/do-production :direct_declarator_base [(p/expect :lparen)
+                                              parse-declarator
+                                              (p/expect :rparen) token-seq])))
+
+
+;; FIXME: productions should be (from ANTLR 3 grammar)
+;; declarator_suffix
+;;     :   '[' constant_expression ']'
+;;     |   '[' ']'
+;;     |   '(' parameter_type_list ')'
+;;     |   '(' identifier_list ')'
+;;     |   '(' ')'
+;; 	;
+;; This looks doable with 2 tokens of lookahead.
+;; 
+(defn parse-declarator-suffix [token-seq]
+  (if (l/next-token-is? token-seq :lparen)
+    (p/do-production :declarator_suffix [(p/expect :lparen) (p/expect :rparen)] token-seq)
+    (p/do-production :declarator_suffix [(p/expect :lbracket) (p/expect :rbracket)] token-seq)))
+
+
+(defn parse-declarator-suffix-list [token-seq]
+  ; Start by parsing one declarator suffix.
+  (let [pr (p/do-production :declarator_suffix_list [parse-declarator-suffix] token-seq)
+        remaining (:tokens pr)]
+    (if (l/next-token-in? remaining declarator-suffix-start-tokens)
+      ; Continue recursively.
+      (p/continue-production pr [parse-declarator-suffix-list])
+      ; Done.
+      pr)))
+
+
+(defn parse-opt-declarator-suffix-list [token-seq]
+  (if (l/next-token-in? token-seq declarator-suffix-start-tokens)
+    (p/do-production :opt_declarator_suffix_list [parse-declarator-suffix-list] token-seq)
+    (p/do-production :opt_declarator_suffix_list [] token-seq)))
+
+
 (defn parse-direct-declarator [token-seq]
-  (p/do-production :direct_declarator [(p/expect :identifier)] token-seq))
+  (p/do-production :direct_declarator [parse-direct-declarator-base
+                                     parse-opt-declarator-suffix-list] token-seq))
 
 
 (defn parse-declarator [token-seq]
@@ -122,5 +174,6 @@
 
 (def testprog
 "int x;
-char *p;")
+char *p;
+double *q[];")
 (def t (parse (l/token-sequence (cl/create-from-string testprog))))
