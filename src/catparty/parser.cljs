@@ -10,32 +10,28 @@
 ; Data types
 ; ------------------------------------------------------------
 
-; Result of expanding a single right-hand-side symbol:
-; A single parse node, and a sequence containing the remaining
-; input tokens.
-(defrecord SingleParseResult [node tokens])
-
-; Result of partially or completely applying a production:
-; A sequence of 0 or more parse nodes, and a sequence containing
-; the remaining input tokens.
-(defrecord ParseResult [nodes tokens])
+;; Result of partially or completely applying a production:
+;; a parse node, and a sequence containing the remaining input tokens.
+(defrecord ParseResult [node tokens])
 
 ; ------------------------------------------------------------
 ; Functions
 ; ------------------------------------------------------------
 
-; Create an initial ParseResult.
-; Useful for beginning a production (as part of a call to
-; apply-production).
-;
-; Parameters:
-;   token-seq - the input token sequence
-;
-; Returns: an initial (empty) ParseResult with the given input
-; token sequence.
-;
-(defn initial-parse-result [token-seq]
-  (ParseResult. [] token-seq))
+;; Create an initial ParseResult.
+;; Useful for beginning a production (as part of a call to
+;; continue-production).
+;;
+;; Parameters:
+;;   symbol    - the grammar symbol to label the parse node with
+;;   token-seq - the input token sequence
+;;
+;; Returns: an initial (empty) ParseResult with the given
+;; symbol and input token sequence.
+;;
+(defn initial-parse-result [symbol token-seq]
+  (ParseResult. (node/make-node symbol []) token-seq))
+
 
 ;; Create a parse node for specified token.
 ;;
@@ -51,17 +47,18 @@
                                lexeme
                                {:lnum lnum, :cnum cnum})))
 
-; Create a symbol application function to expect and consume a particular
-; type of token (i.e., a terminal symol).
-;
-; Parameters:
-;   expected-token-type - a keyword specifying the expected token
-;                         type (e.g., :identifier)
-;
-; Returns: a symbol application function which takes an input tokens
-; sequence and returns a SingleParseResult with the resulting
-; terminal parse node and the remaining input tokens.
-;
+
+;; Create a symbol application function to expect and consume a particular
+;; type of token (i.e., a terminal symol).
+;;
+;; Parameters:
+;;   expected-token-type - a keyword specifying the expected token
+;;                         type (e.g., :identifier)
+;;
+;; Returns: a symbol application function which takes an input tokens
+;; sequence and returns a ParseResult with the resulting
+;; terminal parse node and the remaining input tokens.
+;;
 (defn expect [expected-token-type]
   (fn [token-seq]
     ; Check to see if there are more tokens
@@ -76,10 +73,11 @@
                                     expected-token-type
                                     ", saw "
                                     (lexer/get-token-type next-token)))
-          ; Consume the token and return a SingleParseResult
-          (SingleParseResult. (make-terminal-node next-token) (rest token-seq)))))))
+          ; Consume the token and return a ParseResult
+          (ParseResult. (make-terminal-node next-token) (rest token-seq)))))))
 
-;; Return a SingleParseResult with a single node (labeled with
+
+;; Return a ParseResult with a single node (labeled with
 ;; specified symbol) having as children one or more terminal nodes
 ;; representing tokens matched by given token predicate.
 ;;
@@ -94,10 +92,10 @@
 ;;   nodes for all matching tokens as children
 ;;
 (defn accept-matching [symbol token-pred token-seq]
-  ; Function to construct the SingleParseResult with the children
+  ; Function to construct the ParseResult with the children
   ; and remaining tokens.
   (let [make-result (fn [children remaining]
-                      (SingleParseResult. (node/make-node symbol children) remaining))]
+                      (ParseResult. (node/make-node symbol children) remaining))]
     ; Match tokens until either there are no more tokens,
     ; or we encounter a non-matching token.
     (loop [remaining token-seq
@@ -114,55 +112,67 @@
             ; and continue recursively.
             (recur (rest remaining) (conj acc (make-terminal-node next-tok)))))))))
 
-; Apply a production (or part of a production) by expanding
-; symbols on the right-hand side of a production.
-;
-; Parameters:
-;   parse-result - the ParseResult to which the expanded symbols
-;                  should be added; it also contains the current token sequence
-;   rhs          - is a sequence of symbol application functions (corresponding
-;                  to the symbols on the right hand side of the production being
-;                  applied)
-;
-; Returns: a ParseResult containing the parse nodes resulting from
-; applying the symbol application functions, and the remaining
-; input tokens.
-;
-(defn apply-production [parse-result rhs]
-  (loop [result parse-result
-         symbol-application-functions rhs]
-    (if (empty? symbol-application-functions)
-      ; Done, no more symbol application functions to apply
-      result
-      ; Apply the next symbol application function and continue
-      (let [symbol-application-function (first symbol-application-functions)
-            single-parse-result (symbol-application-function (:tokens result))]
-        (recur (ParseResult. (conj (:nodes result) (:node single-parse-result)) (:tokens single-parse-result))
-               (rest symbol-application-functions))))))
 
-; Complete a production by creating a SingleParseResult from a
-; ParseResult, labeling it with a specified nonterminal symbol.
-;
-; Parameters:
-;    nonterminal  - a keyword specifying the nonterminal symbol (e.g., :statement_list) 
-;    parse-result - a ParseResult containing the results of applying zero or
-;                   more symbol application functions
-;
-; Returns: a SingleParseResult
-;
-(defn complete-production [nonterminal parse-result]
-  (SingleParseResult. (node/make-node nonterminal (:nodes parse-result)) (:tokens parse-result)))
+;; Extend a ParseResult by adding the result of applying a
+;; right hand side symbol application function.
+;; The result's node will have the right hand side's node as a
+;; new child, and will have whatever remaining tokens the
+;; right hand side has.
+;;
+;; Parameters:
+;;   pr - the overall ParseResult (the result of partially applying a production)
+;;   rhs-result - a ParseResult from a right hand side
+;;                symbol application function
+;;
+;; Returns:
+;;   a new overall ParseResult in which the right hand side
+;;   result is incoporated into the overall result
+;;
+(defn extend-parse-result [pr rhs-result]
+  (let [parent (:node pr)
+        child (:node rhs-result)
+        remaining-tokens (:tokens rhs-result)]
+    (ParseResult. (node/add-child parent child) remaining-tokens)))
 
-; Perform a complete production, returning a SingleParseResult
-; as a result.
-;
-; Parameters:
-;   nonterminal - the left-hand nonterminal symbol of the production
-;   rhs         - a sequence of symbol application functions (i.e., the right-hand
-;                 side of the production)
-;   token-seq   - the token sequence to parse
-;
-; Returns: a SingleParseResult
-;
+
+;; Apply a production (or part of a production) by expanding
+;; symbols on the right-hand side of a production.
+;;
+;; Parameters:
+;;   parse-result - the ParseResult to which the expanded symbols
+;;                  should be added; it also contains the current token sequence
+;;   rhs          - is a sequence of symbol application functions (corresponding
+;;                  to the symbols on the right hand side of the production being
+;;                  applied)
+;;
+;; Returns: a ParseResult with a ParseNode containing the children
+;; resulting from applying the symbol application functions, and
+;; the remaining input tokens.
+;;
+(defn continue-production [parse-result rhs]
+  (let [symbol (:symbol parse-result)]
+    (loop [result parse-result
+           fns rhs]
+      (if (empty? fns)
+        ; Done, no more symbol application functions to apply
+        result
+        ; Apply the next symbol application function and continue
+        (let [rhs-fn (first fns)
+              rhs-result (rhs-fn (:tokens result))]
+          (recur (extend-parse-result result rhs-result)
+                 (rest fns)))))))
+
+
+;; Apply a complete or partial production, returning a ParseResult
+;; as a result.
+;;
+;; Parameters:
+;;   nonterminal - the left-hand nonterminal symbol of the production
+;;   rhs         - a sequence of symbol application functions (i.e., the right-hand
+;;                 side of the production)
+;;   token-seq   - the token sequence to parse
+;;
+;; Returns: a ParseResult
+;;
 (defn do-production [nonterminal rhs token-seq]
-  (complete-production nonterminal (apply-production (initial-parse-result token-seq) rhs)))
+  (continue-production (initial-parse-result nonterminal token-seq) rhs))

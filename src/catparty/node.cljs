@@ -40,6 +40,19 @@
 (defn make-node-with-props [symbol value props]
   (Node. symbol value props))
 
+;; Add a child to given Node.
+;;
+;; Parameters:
+;;   node - a Node
+;;   child - a child Node to add
+;;
+;; Returns:
+;;   a new Node which is the same as the original one, but with
+;;   the child added
+;;
+(defn add-child [node child]
+  (Node. (:symbol node) (conj (:value node) child) (:props node)))
+
 ; Add properties to a node, producing an equivalent node
 ; (with the specified new properties, but retaining any existing
 ; properties that don't conflict with the new properties.)
