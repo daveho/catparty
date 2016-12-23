@@ -71,13 +71,12 @@
         remaining-tokens (:tokens pr)]
     (if (empty? remaining-tokens)
       ; At EOF, end the production here
-      (parser/complete-production :declaration-list pr)
+      (parser/complete-production :declaration_list pr)
       ; Not at EOF, continue recursively
-      (parser/complete-production :declaration-list
+      (parser/complete-production :declaration_list
                                   (parser/apply-production pr [parse-declaration-list]))
       )
   ))
-
 
 (defn parse [token-seq]
   (:node (parse-declaration-list token-seq)))
