@@ -15,7 +15,7 @@
 ;;    cnum - char number within line (starts at 1 for first character)
 (defrecord Lexer [lineseq line tok pats lnum cnum])
 
-; Attempt to ensure that the lexer has a line available
+;; Attempt to ensure that the lexer has a line available
 (defn fill-line [lexer]
   (cond
     ; If there is already a line, there's nothing to do
@@ -55,7 +55,7 @@
             ; Current pattern is not a match: try next pattern
             (recur (rest patterns))))))))
 
-; Attempt to ensure that the lexer has the next token available
+;; Attempt to ensure that the lexer has the next token available
 (defn fill-token [lexer]
   (cond
     ; If there is already a token, there's nothing to do
@@ -78,20 +78,20 @@
   (let [lines (clojure.string/split s #"\n")]
     (create-from-lines lines pats)))
 
-; Determine whether lexer is at end of file.
+;; Determine whether lexer is at end of file.
 (defn at-eof [lexer]
   (nil? (:tok lexer)))
 
-; Get the current token.
+;; Get the current token.
 (defn get-current-token [lexer]
   (:tok lexer))
 
-; Consume current token, returning updated lexer.
+;; Consume current token, returning updated lexer.
 (defn consume-token [lexer]
   (fill-token (assoc lexer :tok nil)))
 
-; Use given lexer to create a lazy sequence of tokens.
-; This is the recommended way of using a lexer.
+;; Use given lexer to create a lazy sequence of tokens.
+;; This is the recommended way of using a lexer.
 (defn token-sequence [lexer]
   (if (at-eof lexer)
     []
@@ -99,63 +99,62 @@
           advanced-lexer (consume-token lexer)]
       (cons first-token (lazy-seq (token-sequence advanced-lexer))))))
 
-; Get the next token from a token sequence, throwing
-; an exception if the token sequence is empty.
-;
-; Parameters:
-;   token-seq - the input token sequence
-;
-; Returns: the next token, which is a vector containing the lexeme,
-; token type, line number, and character number
-; (e.g., ["foobar" :identifier 5 11])
-;
+;; Get the next token from a token sequence, throwing
+;; an exception if the token sequence is empty.
+;;
+;; Parameters:
+;;   token-seq - the input token sequence
+;;
+;; Returns: the next token, which is a vector containing the lexeme,
+;; token type, line number, and character number
+;; (e.g., ["foobar" :identifier 5 11])
+;;
 (defn next-token [token-seq]
   (if (empty? token-seq)
     (exc/throw-exception "Unexpected end of input")
     (first token-seq)))
 
-; Check to see whether the next token matches the specified
-; predicate.
-;
-; Parameters:
-;   token-seq - the input token sequence
-;   pred - a token predicate
-;
-; Returns:
-;   true if there is at least one more token and the predicate
-;   returns true for the token, false otherwise
-;
+;; Check to see whether the next token matches the specified
+;; predicate.
+;;
+;; Parameters:
+;;   token-seq - the input token sequence
+;;   pred - a token predicate
+;;
+;; Returns:
+;;   true if there is at least one more token and the predicate
+;;   returns true for the token, false otherwise
+;;
 (defn next-token-matches? [token-seq pred]
   (if (empty? token-seq)
     false
-    (let [token (first token-seq)]
-      (pred token))))
+    (pred (first token-seq))))
 
-; Check to see whether the next token matches the specified
-; grammar symbol.
-;
-; Parameters:
-;   token-seq - the input token sequence
-;   symbol - a terminal symbol
-;
-; Returns:
-;   true if there is at least one more token and its symbol
-;   matches the specified terminal symbol
-;
+;; Check to see whether the next token matches the specified
+;; grammar symbol.
+;;
+;; Parameters:
+;;   token-seq - the input token sequence
+;;   symbol - a terminal symbol
+;;
+;; Returns:
+;;   true if there is at least one more token and its symbol
+;;   matches the specified terminal symbol
+;;
 (defn next-token-is? [token-seq symbol]
   (next-token-matches? token-seq (fn [[lexeme tsym]] (= tsym symbol))))
 
-; Check to see whether the next token's grammar symbol is
-; contained in the specified collection.
-;
-; Parameters:
-;   token-seq - the input token sequence
-;   coll - a collection of grammar symbols
-;
-; Returns:
-;   true if there is at least one more token and the
-;   specified collection contains its grammar symbol
-;
+;; Check to see whether the next token's grammar symbol is
+;; contained in the specified collection.
+;;
+;; Parameters:
+;;   token-seq - the input token sequence
+;;   coll - a collection of grammar symbols
+;;
+;; Returns:
+;;   true if there is at least one more token and the
+;;   specified collection contains its grammar symbol
+;;
 (defn next-token-in? [token-seq coll]
   (next-token-matches? token-seq (fn [[lexeme tsym]] (contains? coll tsym))))
 
@@ -183,3 +182,19 @@
 ;;
 (defn get-token-type [token]
   (second token))
+
+
+;; Make a predicate function testing whether a token's type
+;; is in a specified set of token types.
+;;
+;; Parameters:
+;;   coll - collection of token types
+;;
+;; Returns:
+;;   token predicate function which will return true when
+;;   applied to a token whose type is a member of the specified
+;;   collection
+;;
+(defn make-token-type-pred [coll]
+  (fn [tok]
+    (contains? coll (get-token-type tok))))

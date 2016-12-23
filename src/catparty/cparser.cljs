@@ -2,7 +2,8 @@
   (:require [catparty.parser :as p]
             [catparty.lexer :as l]
             [catparty.clexer :as cl]
-            [catparty.prettyprint :as pp]))
+            [catparty.prettyprint :as pp]
+            [clojure.set :as set]))
 
 ;; Recursive descent parser for C.
 ;; Adapted from the ANTLR C grammar:
@@ -11,14 +12,50 @@
 (def storage-class-specifiers
   #{:kw_typedef :kw_extern :kw_static :kw_auto :kw_register})
 
-
 (def type-specifiers
   #{:kw_void :kw_char :kw_short :kw_int :kw_long :kw_float :kw_double :kw_signed :kw_unsigned})
 
+(def declaration-specifiers (set/union storage-class-specifiers type-specifiers))
+
+(def type-qualifiers
+  #{:kw_const :kw_restrict :kw_volatile})
+
+;; Set of tokens that can begin a declarator
+(def declarator-start-tokens
+  #{:identifier :lparen :op_star})
+
+
+(defn parse-type-qualifier-list [token-seq]
+  (p/accept-matching :type_qualifier_list
+                     (l/make-token-type-pred type-qualifiers)
+                     token-seq))
+
+
+(defn parse-pointer [token-seq]
+  ; pointer -> ^ '*' type-qualifier-list
+  ; pointer -> ^ '*' type-qualifier-list pointer
+  (let [pr (p/do-production :pointer [(p/expect :op_star) parse-type-qualifier-list] token-seq)
+        remaining (:tokens pr)]
+    (if (l/next-token-is? remaining :op_star)
+      ; continue recursively
+      (p/continue-production pr [parse-pointer])
+      ; done
+      pr)))
+
+
+(defn parse-opt-pointer [token-seq]
+  (if (l/next-token-is? token-seq :op_star)
+    (p/do-production :opt_pointer [parse-pointer] token-seq)
+    (p/do-production :opt_pointer [] token-seq)))
+
 
 ;; FIXME: just handle identifiers for now
+(defn parse-direct-declarator [token-seq]
+  (p/do-production :direct_declarator [(p/expect :identifier)] token-seq))
+
+
 (defn parse-declarator [token-seq]
-  (p/do-production :declarator [(p/expect :identifier)] token-seq))
+  (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq))
 
 
 ;; FIXME: allow initialization
@@ -26,15 +63,10 @@
   (p/do-production :init_declarator [parse-declarator] token-seq))
 
 
-;; FIXME: symbol table lookup here needed to detect typedef names.
-(defn is-declaration-specifier? [token]
-  (let [token-type (l/get-token-type token)]
-    (or (contains? storage-class-specifiers token-type)
-        (contains? type-specifiers token-type))))
-
-
 (defn parse-declaration-specifiers [token-seq]
-  (p/accept-matching :declaration_specifiers is-declaration-specifier? token-seq))
+  (p/accept-matching :declaration_specifiers
+                     (l/make-token-type-pred declaration-specifiers)
+                     token-seq))
 
 
 (defn parse-init-declarator-list [token-seq]
@@ -53,8 +85,8 @@
 
 
 (defn parse-opt-init-declarator-list [token-seq]
-  ; declarators always begin with either an identifier or left paren
-  (if (l/next-token-in? token-seq #{:identifier :lparen})
+  ; do we see a declarator?
+  (if (l/next-token-in? token-seq declarator-start-tokens)
     ; there is at least one declarator
     (p/do-production :opt_init_declarator_list [parse-init-declarator-list] token-seq)
     ; no declarators
@@ -88,5 +120,7 @@
 
 ;; Just for testing...
 
-(def testprog "int x;")
+(def testprog
+"int x;
+char *p;")
 (def t (parse (l/token-sequence (cl/create-from-string testprog))))
