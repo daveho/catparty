@@ -60,7 +60,7 @@
 ;; terminal parse node and the remaining input tokens.
 ;;
 (defn expect [expected-token-type]
-  (fn [token-seq]
+  (fn [token-seq & [ctx]]
     ; Check to see if there are more tokens
     (if (empty? token-seq)
       ; No more tokens
@@ -144,12 +144,13 @@
 ;;   rhs          - is a sequence of symbol application functions (corresponding
 ;;                  to the symbols on the right hand side of the production being
 ;;                  applied)
+;;   ctx (optional) - the parsing context (if one is being used)
 ;;
 ;; Returns: a ParseResult with a ParseNode containing the children
 ;; resulting from applying the symbol application functions, and
 ;; the remaining input tokens.
 ;;
-(defn continue-production [parse-result rhs]
+(defn continue-production [parse-result rhs & [ctx]]
   (let [symbol (:symbol parse-result)]
     (loop [result parse-result
            fns rhs]
@@ -158,7 +159,7 @@
         result
         ; Apply the next symbol application function and continue
         (let [rhs-fn (first fns)
-              rhs-result (rhs-fn (:tokens result))]
+              rhs-result (rhs-fn (:tokens result) ctx)]
           (recur (extend-parse-result result rhs-result)
                  (rest fns)))))))
 
@@ -171,8 +172,9 @@
 ;;   rhs         - a sequence of symbol application functions (i.e., the right-hand
 ;;                 side of the production)
 ;;   token-seq   - the token sequence to parse
+;;   ctx (optional) - the parsing context (if one is being used)
 ;;
 ;; Returns: a ParseResult
 ;;
-(defn do-production [nonterminal rhs token-seq]
-  (continue-production (initial-parse-result nonterminal token-seq) rhs))
+(defn do-production [nonterminal rhs token-seq & [ctx]]
+  (continue-production (initial-parse-result nonterminal token-seq) rhs ctx))

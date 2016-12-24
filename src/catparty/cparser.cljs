@@ -31,13 +31,13 @@
   #{:lparen :lbracket})
 
 
-(defn parse-type-qualifier-list [token-seq]
+(defn parse-type-qualifier-list [token-seq & [ctx]]
   (p/accept-matching :type_qualifier_list
                      (l/make-token-type-pred type-qualifiers)
                      token-seq))
 
 
-(defn parse-pointer [token-seq]
+(defn parse-pointer [token-seq & [ctx]]
   ; pointer -> ^ '*' type-qualifier-list
   ; pointer -> ^ '*' type-qualifier-list pointer
   (let [pr (p/do-production :pointer [(p/expect :op_star) parse-type-qualifier-list] token-seq)
@@ -49,7 +49,7 @@
       pr)))
 
 
-(defn parse-opt-pointer [token-seq]
+(defn parse-opt-pointer [token-seq & [ctx]]
   (if (l/next-token-is? token-seq :op_star)
     (p/do-production :opt_pointer [parse-pointer] token-seq)
     (p/do-production :opt_pointer [] token-seq)))
@@ -58,14 +58,14 @@
 (declare parse-declarator)
 
 
-(defn parse-direct-declarator-base [token-seq]
+(defn parse-direct-declarator-base [token-seq & [ctx]]
   ; direct-declarator-base -> identifier
   ; direct-declarator-base -> '(' declarator ')'
   (if (l/next-token-is? token-seq :identifier)
     (p/do-production :direct_declarator_base [(p/expect :identifier)] token-seq)
     (p/do-production :direct_declarator_base [(p/expect :lparen)
                                               parse-declarator
-                                              (p/expect :rparen) token-seq])))
+                                              (p/expect :rparen)] token-seq)))
 
 
 ;; FIXME: productions should be (from ANTLR 3 grammar)
@@ -78,13 +78,13 @@
 ;; 	;
 ;; This looks doable with 2 tokens of lookahead.
 ;; 
-(defn parse-declarator-suffix [token-seq]
+(defn parse-declarator-suffix [token-seq & [ctx]]
   (if (l/next-token-is? token-seq :lparen)
     (p/do-production :declarator_suffix [(p/expect :lparen) (p/expect :rparen)] token-seq)
     (p/do-production :declarator_suffix [(p/expect :lbracket) (p/expect :rbracket)] token-seq)))
 
 
-(defn parse-declarator-suffix-list [token-seq]
+(defn parse-declarator-suffix-list [token-seq & [ctx]]
   ; Start by parsing one declarator suffix.
   (let [pr (p/do-production :declarator_suffix_list [parse-declarator-suffix] token-seq)
         remaining (:tokens pr)]
@@ -95,33 +95,33 @@
       pr)))
 
 
-(defn parse-opt-declarator-suffix-list [token-seq]
+(defn parse-opt-declarator-suffix-list [token-seq & [ctx]]
   (if (l/next-token-in? token-seq declarator-suffix-start-tokens)
     (p/do-production :opt_declarator_suffix_list [parse-declarator-suffix-list] token-seq)
     (p/do-production :opt_declarator_suffix_list [] token-seq)))
 
 
-(defn parse-direct-declarator [token-seq]
+(defn parse-direct-declarator [token-seq & [ctx]]
   (p/do-production :direct_declarator [parse-direct-declarator-base
                                      parse-opt-declarator-suffix-list] token-seq))
 
 
-(defn parse-declarator [token-seq]
+(defn parse-declarator [token-seq & [ctx]]
   (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq))
 
 
 ;; FIXME: allow initialization
-(defn parse-init-declarator [token-seq]
+(defn parse-init-declarator [token-seq & [ctx]]
   (p/do-production :init_declarator [parse-declarator] token-seq))
 
 
-(defn parse-declaration-specifiers [token-seq]
+(defn parse-declaration-specifiers [token-seq & [ctx]]
   (p/accept-matching :declaration_specifiers
                      (l/make-token-type-pred declaration-specifiers)
                      token-seq))
 
 
-(defn parse-init-declarator-list [token-seq]
+(defn parse-init-declarator-list [token-seq & [ctx]]
   ; Initial state:
   ;   init-declarator-list -> ^ init-declarator
   ;   init-declarator-list -> ^ init-declarator ',' init-declarator-list
@@ -136,7 +136,7 @@
       pr)))
 
 
-(defn parse-opt-init-declarator-list [token-seq]
+(defn parse-opt-init-declarator-list [token-seq & [ctx]]
   ; do we see a declarator?
   (if (l/next-token-in? token-seq declarator-start-tokens)
     ; there is at least one declarator
@@ -145,13 +145,13 @@
     (p/do-production :opt_init_declarator_list [] token-seq)))
 
 
-(defn parse-declaration [token-seq]
+(defn parse-declaration [token-seq & [ctx]]
   (p/do-production :declaration [parse-declaration-specifiers
                                  parse-opt-init-declarator-list
                                  (p/expect :semicolon)] token-seq))
 
 
-(defn parse-declaration-list [token-seq]
+(defn parse-declaration-list [token-seq & [ctx]]
   ; Initial state is:
   ;   declaration-list -> ^ declaration
   ;   declaration-list -> ^ declaration declaration-list
