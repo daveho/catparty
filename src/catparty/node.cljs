@@ -53,6 +53,21 @@
 (defn add-child [node child]
   (Node. (:symbol node) (conj (:value node) child) (:props node)))
 
+
+;; Relabel a node with a different symbol.
+;;
+;; Parameters:
+;;   node - a Node
+;;   new-symbol - the new symbol
+;;
+;; Returns:
+;;   a Node identical to the original Node, except with
+;;   the new symbol
+;;
+(defn relabel [node symbol]
+  (assoc node :symbol symbol))
+
+
 ; Add properties to a node, producing an equivalent node
 ; (with the specified new properties, but retaining any existing
 ; properties that don't conflict with the new properties.)
@@ -128,3 +143,34 @@
 ;
 (defn get-prop [node prop]
   (get (:props node) prop))
+
+
+;; Find the node specified by given path.
+;; If no such node exists, return false.
+;; Otherwise, return the result of applying the specified
+;; predicate function to the node.
+;;
+;; Parameters:
+;;   start - the starting node
+;;   path - the path (sequence of child index values describing
+;;          a path to a descendent of the start node)
+;;   pred - predicate function to be applied to the node named
+;;          by the path
+;;
+;; Returns:
+;;   false if the node named by the path doesn't exist,
+;;   otherwise the value returned by invoking the predicate
+;;   function on the node named by the path
+;;
+(defn check-path [start path pred]
+  (loop [n start
+         p path]
+    (if (empty? p)
+      (pred n)
+      (let [nchildren (num-children n)
+            index (first p)]
+        (if (>= index nchildren)
+          ; the node named by the path doesn't exist
+          false
+          ; continue recursively in specified child
+          (recur (get-child n index) (rest p)))))))

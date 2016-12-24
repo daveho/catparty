@@ -135,6 +135,25 @@
     (ParseResult. (node/add-child parent child) remaining-tokens)))
 
 
+;; Relabel given ParseResult's Node with the specified symbol.
+;; This is useful for productions where a single parse function
+;; can return distinct kinds of parse trees because of
+;; ambiguities that can't be resolved with fixed lookahead.
+;; I'm looking at you, C (function definition vs. declaration in
+;; the context of an external declaration.)
+;;
+;; Parameters:
+;;   pr - a ParseResult
+;;   symbol - a nonterminal symbol
+;;
+;; Returns:
+;;   a ParseResult in which the Node is relabeled with
+;;   the new symbol
+;;
+(defn relabel-parse-result [pr symbol]
+  (assoc pr :node (node/relabel (:node pr) symbol)))
+
+
 ;; Apply a production (or part of a production) by expanding
 ;; symbols on the right-hand side of a production.
 ;;

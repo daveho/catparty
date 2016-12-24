@@ -1,5 +1,6 @@
 (ns catparty.cparser
-  (:require [catparty.parser :as p]
+  (:require [catparty.node :as node]
+            [catparty.parser :as p]
             [catparty.lexer :as l]
             [catparty.clexer :as cl]
             [catparty.prettyprint :as pp]
@@ -110,9 +111,49 @@
   (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq))
 
 
-;; FIXME: allow initialization
+;; TODO: this is just a placeholder for now
+(defn parse-initializer [token-seq & [ctx]]
+  (p/do-production :initializer [(p/expect :dec_literal)] token-seq ctx))
+
+
+;; TODO: this is just a placeholder for now
+(defn parse-compound-statement [token-seq & [ctx]]
+  (p/do-production :compound_statement [(p/expect :lbrace) (p/expect :rbrace)] token-seq ctx))
+
+
+;; Ok, here is a complicated part of the parser.
+;; We want to allow function definitions to be parsed here if
+;; (in the parsing context) allow_func is true.
+;; A function definition is very much like an init declarator, except:
+;;
+;;    - there is no '=' (i.e., no initialization)
+;;    - there is a compound statement immediately after the declarator
+;;
+;; parse-init-declarator-list will also need to be aware of
+;; this issue, so that it avoids attempting to parse further
+;; declarators in the same declaration.  Also, parse-declaration
+;; will need to check to see if a function definition was produced,
+;; in which case it should not require a terminating ';' token.
+;;
 (defn parse-init-declarator [token-seq & [ctx]]
-  (p/do-production :init_declarator [parse-declarator] token-seq))
+  (let [pr (p/do-production :init_declarator [parse-declarator] token-seq)
+        remaining (:tokens pr)]
+    (cond
+     ; If the next token is the assignment operator,
+     ; continue the production to parse the initializer.
+     (l/next-token-is? remaining :op_assign)
+     (p/continue-production pr [(p/expect :op_assign) parse-initializer] ctx)
+
+     ; If a function definition is allowed, and the next token
+     ; is an open brace, then convert the result into a function definition,
+     ; and continue the production by parsing a compound statement.
+     (and (:allow_func ctx) (l/next-token-is? remaining :lbrace))
+     (let [pr2 (p/relabel-parse-result pr :function_definition)]
+       (p/continue-production pr2 [parse-compound-statement] ctx))
+
+     ; Otherwise, end the production here (there is no initializer,
+     ; and this is not a function definition)
+     :else pr)))
 
 
 (defn parse-declaration-specifiers [token-seq & [ctx]]
@@ -126,29 +167,57 @@
   ;   init-declarator-list -> ^ init-declarator
   ;   init-declarator-list -> ^ init-declarator ',' init-declarator-list
   ; Start by parsing just an init declarator.
-  (let [pr (p/do-production :init_declarator_list [parse-init-declarator] token-seq)
+  (let [pr (p/do-production :init_declarator_list [parse-init-declarator] token-seq ctx)
         remaining (:tokens pr)]
-    ; If the next token is a comma, continue recursively.
-    (if (l/next-token-is? remaining :comma)
-      ; init-declarator-list -> init-declarator ^ ',' init-declarator-list
-      (p/continue-production pr [(p/expect :comma) parse-init-declarator-list])
-      ; init-declarator-list -> init-declarator ^
-      pr)))
+    ; Grab the init declarator we just parsed, in case it turns
+    ; out to be a function definition.
+    (let [first-child (node/get-child (:node pr) 0)]
+      (cond
+       ; If a function definition was parsed, end the production here
+       ; (a function definition can have only one declarator).
+       (= (:symbol first-child) :function_definition) pr
+
+       ; If the next token is a comma, continue recursively, and
+       ; update the parsing context to indicate that function definitions
+       ; will not be allowed.  (See above :-)
+       (l/next-token-is? remaining :comma)
+       (p/continue-production pr [(p/expect :comma) parse-init-declarator-list] (dissoc ctx :allow_func))
+
+       ; No more declarators, so end the production here
+       :else pr))))
 
 
 (defn parse-opt-init-declarator-list [token-seq & [ctx]]
   ; do we see a declarator?
   (if (l/next-token-in? token-seq declarator-start-tokens)
     ; there is at least one declarator
-    (p/do-production :opt_init_declarator_list [parse-init-declarator-list] token-seq)
+    (p/do-production :opt_init_declarator_list [parse-init-declarator-list] token-seq ctx)
     ; no declarators
     (p/do-production :opt_init_declarator_list [] token-seq)))
 
 
+; Check whether given node is a function definition.
+(defn is-function-definition? [node]
+  (= (:symbol node) :function_definition))
+
+
 (defn parse-declaration [token-seq & [ctx]]
-  (p/do-production :declaration [parse-declaration-specifiers
-                                 parse-opt-init-declarator-list
-                                 (p/expect :semicolon)] token-seq))
+  ; Parse just the declaration specifiers and (optional) init declarator list.
+  ; We will need to know whether a function definition was parsed.
+  (let [pr (p/do-production :declaration [parse-declaration-specifiers
+                                          parse-opt-init-declarator-list] token-seq ctx)]
+    ; Check the second child's (opt init declarator list)
+    ; first child's (init declarator list)
+    ; first child (the first init declarator in the init declarator list)
+    ; to see if it's a function definition.
+    (if (node/check-path (:node pr) [1 0 0] is-function-definition?)
+      ; A function definition was parsed!
+      ; The declaration ends here.
+      pr
+      ; One or more non-function-definition init declarators
+      ; were parsed.  Require a semicolon to terminate the
+      ; overall declaration.
+      (p/continue-production pr [(p/expect :semicolon)]))))
 
 
 (defn parse-declaration-list [token-seq & [ctx]]
@@ -156,24 +225,29 @@
   ;   declaration-list -> ^ declaration
   ;   declaration-list -> ^ declaration declaration-list
   ; Start by parsing just a declaration.
-  (let [pr (p/do-production :declaration_list [parse-declaration] token-seq)
+  (let [pr (p/do-production :declaration_list [parse-declaration] token-seq ctx)
         remaining (:tokens pr)]
     ; See if declaration list continues.
     (if (empty? remaining)
       ; No more tokens, so end declaration list.
       pr
       ; Declaration list continues.
-      (p/continue-production pr [parse-declaration-list]))))
+      (p/continue-production pr [parse-declaration-list] ctx))))
 
 
 (defn parse [token-seq]
-  (:node (parse-declaration-list token-seq)))
+  (:node (parse-declaration-list token-seq {:allow_func true})))
 
 
 ;; Just for testing...
 
+;; (def testprog
+;; "int x;
+;; char *p;
+;; double *q[];")
+
 (def testprog
-"int x;
-char *p;
-double *q[];")
+"int f() {
+}")
+
 (def t (parse (l/token-sequence (cl/create-from-string testprog))))
