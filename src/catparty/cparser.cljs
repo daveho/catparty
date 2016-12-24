@@ -210,7 +210,7 @@
     ; first child's (init declarator list)
     ; first child (the first init declarator in the init declarator list)
     ; to see if it's a function definition.
-    (if (node/check-path (:node pr) [1 0 0] is-function-definition?)
+    (if (node/check-node (:node pr) [1 0 0] is-function-definition?)
       ; A function definition was parsed!
       ; The declaration ends here.
       pr

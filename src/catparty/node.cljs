@@ -147,6 +147,24 @@
 
 ;; Find the node specified by given path.
 ;; If no such node exists, return false.
+;; Otherwise, return nil.
+(defn find-node [start path]
+  (loop [n start
+         p path]
+    (if (empty? p)
+      ; Found the node named by the path
+      n
+      (let [nchildren (num-children n)
+            index (first p)]
+        (if (>= index nchildren)
+          ; the node named by the path doesn't exist
+          nil
+          ; continue recursively in specified child
+          (recur (get-child n index) (rest p)))))))
+
+
+;; Find the node specified by given path.
+;; If no such node exists, return false.
 ;; Otherwise, return the result of applying the specified
 ;; predicate function to the node.
 ;;
@@ -162,15 +180,8 @@
 ;;   otherwise the value returned by invoking the predicate
 ;;   function on the node named by the path
 ;;
-(defn check-path [start path pred]
-  (loop [n start
-         p path]
-    (if (empty? p)
-      (pred n)
-      (let [nchildren (num-children n)
-            index (first p)]
-        (if (>= index nchildren)
-          ; the node named by the path doesn't exist
-          false
-          ; continue recursively in specified child
-          (recur (get-child n index) (rest p)))))))
+(defn check-node [start path pred]
+  (let [n (find-node start path)]
+    (if (nil? n)
+      false
+      (pred n))))
