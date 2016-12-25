@@ -1,22 +1,22 @@
 (ns catparty.parser
-  (:require [catparty.lexer :as lexer]
-            [catparty.clexer :as clexer]
+  (:require [catparty.lexer :as l]
             [catparty.node :as node]
             [catparty.exc :as exc]))
 
 ;; Recursive descent and precedence climbing parser routines.
 
-; ------------------------------------------------------------
-; Data types
-; ------------------------------------------------------------
+;; ------------------------------------------------------------
+;; Data types
+;; ------------------------------------------------------------
 
 ;; Result of partially or completely applying a production:
 ;; a parse node, and a sequence containing the remaining input tokens.
 (defrecord ParseResult [node tokens])
 
-; ------------------------------------------------------------
-; Functions
-; ------------------------------------------------------------
+
+;; ------------------------------------------------------------
+;; Recursive descent parsing functions
+;; ------------------------------------------------------------
 
 ;; Create an initial ParseResult.
 ;; Useful for beginning a production (as part of a call to
@@ -67,12 +67,12 @@
       (exc/throw-exception "Unexpected end of input")
       (let [next-token (first token-seq)]
         ; Check whether next token matches expected token type
-        (if (not (lexer/token-is-type? next-token expected-token-type))
+        (if (not (l/token-is-type? next-token expected-token-type))
           ; Wrong token type seen
           (exc/throw-exception (str "Expected "
                                     expected-token-type
                                     ", saw "
-                                    (lexer/get-token-type next-token)))
+                                    (l/get-token-type next-token)))
           ; Consume the token and return a ParseResult
           (ParseResult. (make-terminal-node next-token) (rest token-seq)))))))
 
@@ -197,3 +197,106 @@
 ;;
 (defn do-production [nonterminal rhs token-seq & [ctx]]
   (continue-production (initial-parse-result nonterminal token-seq) rhs ctx))
+
+
+;; ------------------------------------------------------------
+;; Precedence climbing (for parsing infix expressions)
+;; ------------------------------------------------------------
+
+;; Record type for customization of the precedence climbing parser.
+;; An instance of this type needs to be stored in the parsing context,
+;; as the value of the :operators key.
+;;
+;; Fields are:
+;;   precedence - map of operators to their precedence
+;;   associativity - map of operators to their associativity (:left or :right)
+;;   parse-primary - parse function for parsing a primary expression
+;;
+(defrecord Operators [precedence associativity parse-primary])
+
+
+;; Check whether given token is an operator.
+(defn is-operator? [token ops]
+  (let [token-type (l/get-token-type token)]
+    (contains? (:precedence ops) token-type)))
+
+
+;; This is adapted more or less directly from the wikipedia pseudo code:
+;;   http://en.wikipedia.org/wiki/Operator-precedence_parser
+
+(defn need-recursive-parse? [token token-seq ops]
+  ; Check whether
+  ;   "the next token is a binary operator whose precedence is greater
+  ;   than op's, or a right-associative operator whose precedence is equal to op's"
+  (if (not (l/next-token-matches? token-seq (fn [t] (is-operator? t ops))))
+    ; Either we've reached the end of the input token sequence,
+    ; or the next token isn't an operator.
+    false
+    ; Check the precedence and associativity of the next token.
+    (let [precedence (:precedence ops)
+          associativity (:associativity ops)
+          op-token-type (l/get-token-type token)
+          op-prec (get precedence op-token-type)
+          next-token-type (l/get-token-type (first token-seq))
+          next-prec (get precedence next-token-type)
+          next-assoc (get associativity next-token-type)]
+      (or (> next-prec op-prec)
+          (and (>= next-prec op-prec) (= :right next-assoc))))))
+
+
+(declare parse-expression-1)
+
+
+(defn parse-rhs [op rhs-result token-seq ctx]
+  (let [token-seq (:tokens rhs-result)
+        ops (:operators ctx)
+        precedence (:precedence ops)]
+    (if (not (need-recursive-parse? op token-seq ops))
+      ; We can continue at the same precedence level,
+      ; so rhs is fine as-is
+      rhs-result
+      ; Recursive parsing is needed at a higher precedence level
+      ; (or we encountered a right-associative operator).
+      (let [next-token (first token-seq)
+            lookahead-token-type (l/get-token-type next-token)
+            lookahead-prec (get precedence lookahead-token-type)]
+        (parse-expression-1 rhs-result lookahead-prec token-seq) ctx))))
+
+
+(defn parse-expression-1 [init-lhs-result min-precedence init-token-seq ctx]
+  (let [ops (:operators ctx)
+        parse-primary (:parse-primary ops)]
+    (loop [lhs-result init-lhs-result
+           token-seq init-token-seq]
+      ; See whether next token is an operator
+      (if (not (l/next-token-matches? token-seq (fn [t] (is-operator? t ops))))
+        ; Done, return lhs ParseResult
+        lhs-result
+        ; Get op and parse next primary expression
+        (let [op (first token-seq)
+              next-primary-result (parse-primary (rest token-seq) ctx)
+              ; Parsing the rhs is done in a separate function,
+              ; which may involve recursive calls to parse-expression-1.
+              rhs-result (parse-rhs op next-primary-result (:tokens next-primary-result) ctx)]
+          ; Combine lhs and rhs and continue parsing at the same precedence level
+          (recur (node/make-node (l/get-token-type op) [(:node lhs-result) (:node rhs-result)])
+                 (:tokens rhs-result)))))))
+
+
+;; Parse an infix expression using precedence climbing.
+;;
+;; Parameters:
+;;   token-seq - sequence of tokens to be parsed as an infix expression
+;;   ctx - the parsing context, which must contain an :operators entry
+;;         which refers to an instance of Operators (for operator
+;;         precedence map, operator associativity map, parse primary
+;;         function, etc.)
+;;
+;; Returns:
+;;   ParseResult with the result of parsing the infix expression
+;;
+(defn parse-expression [token-seq ctx]
+  (let [ops (:operators ctx)
+        parse-primary (:parse-primary ops)
+        lhs-result (parse-primary token-seq ctx)]
+    (parse-expression-1 lhs-result 0 (:tokens lhs-result) ctx)))
