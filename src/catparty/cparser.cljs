@@ -4,6 +4,7 @@
             [catparty.lexer :as l]
             [catparty.clexer :as cl]
             [catparty.prettyprint :as pp]
+            [catparty.exc :as exc]
             [clojure.set :as set]))
 
 ;; Recursive descent parser for C.
@@ -30,6 +31,145 @@
 ;; Set of tokens that can begin a declarator suffix
 (def declarator-suffix-start-tokens
   #{:lparen :lbracket})
+
+;; Set of tokens that are literal values
+;; TODO: others
+(def literals
+  #{:dec_literal :hex_literal})
+
+;; Set of assignment operator tokens
+(def assignment-operators
+  #{:op_assign :op_lshift_assign :op_rshift_assign :op_bit_or_assign :op_bit_and_assign
+    :op_bit_xor_assign :op_plus_assign :op_minus_assign :op_mul_assign :op_div_assign
+    :op_mod_assign})
+
+;; Binary operator precedences:
+;; note that comma, assignment, and conditionals (?:) are
+;; not parsed by precedence climbing because the conditional
+;; operator isn't a binary operator.  These are easy
+;; enough to handle by recursive descent, however, and
+;; fortunately for us the assignment operators are
+;; right-associative.
+(def binop-precedence
+  {:op_or 0,
+   :op_and 1,
+   :op_bit_or 2,
+   :op_bit_xor 3,
+   :op_bit_and 4,
+   :op_eq 5,
+   :op_ne 5,
+   :op_lt 6,
+   :op_gt 6,
+   :op_lte 6,
+   :op_gte 6,
+   :op_lshift 7,
+   :op_rshift 7,
+   :op_plus 8,
+   :op_minus 8,
+   :op_star 9,
+   :op_div 9,
+   :op_mod 9,
+   ; All higher-precedence constructs (casts, unary operators,
+   ; etc.) are handled by parse-cast-expression
+   })
+
+;; Binary operator associativities:
+;; all of the binary operators we handle by precedence climbing are
+;; left asssociative
+(def binop-associativity
+  (into {} (map (fn [k] [k :left]) (keys binop-precedence))))
+
+
+(declare parse-cast-expression)
+
+
+(def c-infix-operators
+  (p/Operators. binop-precedence binop-associativity parse-cast-expression))
+
+
+
+(defn parse-logical-or-expression [token-seq & [ctx]]
+  (let [ctx2 (assoc ctx :operators c-infix-operators)]
+    (p/parse-infix-expression token-seq ctx2)))
+
+
+(declare parse-expression)
+
+
+(defn parse-conditional-expression [token-seq & [ctx]]
+  ; State is:
+  ;   conditional-expression -> ^ logical-or-expression
+  ;   conditional-expression -> ^ logical-or-expression '?' expression : conditional-expression
+  ; Start by parsing a logical or expression.
+  (let [pr (p/do-production :conditional_expression [parse-logical-or-expression] token-seq ctx)
+        remaining (:tokens pr)]
+    ; See if the expression just parsed is a conditional expression
+    ; by looking ahead to see if there's a '?'
+    (if (l/next-token-is? remaining :ques)
+      ; Parse clauses of conditional operator
+      (p/continue-production pr [(p/expect :ques)
+                               parse-expression
+                               (p/expect :colon)
+                               parse-conditional-expression] ctx)
+      ; Production ends here
+      pr)))
+
+
+(defn parse-assignment-expression [token-seq & [ctx]]
+  ; State is:
+  ;    assignment-expression -> ^ conditional-expression
+  ;    assignment-expression -> ^ conditional-expression assignment-operator assignment-expression
+  ; Note that in K&R the beginning of the right hand side of the
+  ; second production is actually "unary-expression", which would
+  ; exclude some kinds of expressions that are never lvalues.
+  ; We'll just deal with that during semantic analysis.
+  ; Start by parsing a conditional expression.
+  (let [pr (p/do-production :assignment_expression [parse-conditional-expression] token-seq ctx)
+        remaining (:tokens pr)]
+    ; See if there is an assignment operator
+    (if (l/next-token-in? remaining assignment-operators)
+      ; Continue production recursively.
+      (p/continue-production pr [(p/expect (l/get-token-type (first remaining)))
+                               parse-assignment-expression] token-seq ctx)
+      ; Production ends here
+      pr)))
+
+
+(defn parse-expression [token-seq & [ctx]]
+  ; State is:
+  ;   expression -> ^ assignment-expression
+  ;   expression -> ^ assignment-expression ',' expression
+  ; NOTE: this will parse the comma operator as right associative,
+  ; so we'll have to fix the resulting parse tree.
+  ; TODO: implement the restructuring of the parse tree.
+  ; TODO: there might be a way to do this by not using p/continue-production,
+  ; but rather using ad-hoc code to parse a comma-separated sequence
+  ; of assignment expressions and then transform the result into the
+  ; correct (left associative) parse tree.
+  (let [pr (p/do-production :expression [parse-assignment-expression] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-is? remaining :comma)
+      ; Production continues recursively
+      (p/continue-production pr [(p/expect :comma) parse-expression] ctx)
+      ; Production ends here
+      pr)))
+
+
+(def is-literal? (l/make-token-type-pred literals))
+
+
+(defn parse-literal [token-seq & [ctx]]
+  (if (not (l/next-token-matches? token-seq is-literal?))
+    (exc/throw-exception "Expected literal")
+    (p/do-production :literal [(p/expect (l/get-token-type (first token-seq)))] token-seq ctx)))
+
+
+;; TODO: just a place holder for now (allowing only integer literals)
+(defn parse-cast-expression [token-seq & [ctx]]
+  (p/do-production :cast_expression [parse-literal] token-seq ctx)
+  )
+
+
 
 
 (defn parse-type-qualifier-list [token-seq & [ctx]]

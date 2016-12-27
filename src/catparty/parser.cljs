@@ -295,7 +295,7 @@
 ;; Returns:
 ;;   ParseResult with the result of parsing the infix expression
 ;;
-(defn parse-expression [token-seq ctx]
+(defn parse-infix-expression [token-seq ctx]
   (let [ops (:operators ctx)
         parse-primary (:parse-primary ops)
         lhs-result (parse-primary token-seq ctx)]

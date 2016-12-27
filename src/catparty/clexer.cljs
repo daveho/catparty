@@ -46,27 +46,35 @@
 
 (def c-operator-patterns
   [[#"^==" :op_eq]
-   [#"^=" :op_assign]
+   [#"^<<=" :op_lshift_assign]
    [#"^<<" :op_lshift]
    [#"^<=" :op_lte]
    [#"^<" :op_lt]
+   [#"^>>=" :op_rshift_assign]
    [#"^>>" :op_rshift]
    [#"^>=" :op_gte]
    [#"^>" :op_gt]
    [#"^!=" :op_ne]
    [#"^!" :op_not]
    [#"^\|\|" :op_or]
+   [#"^\|=" :op_bit_or_assign]
    [#"^\|" :op_bit_or]
    [#"^&&" :op_and]
+   [#"^&=" :op_bit_and_assign]
    [#"^&" :op_bit_and]
+   [#"^\^=" :op_bit_xor_assign]
    [#"^\^" :op_bit_xor]
    [#"^~" :op_bit_compl]
+   [#"^\+=" :op_plus_assign]
    [#"^\+" :op_plus]
+   [#"^-=" :op_minus_assign]
    [#"^-" :op_minus]
-   [#"^\*" :op_star]
+   [#"^\*=" :op_mul_assign]
+   [#"^\*" :op_star] ; note that this means multiplication and pointer/dereference
+   [#"^/=" :op_div_assign]
    [#"^/" :op_div]
+   [#"^%=" :op_mod_assign]
    [#"^%" :op_mod]
-   [#"^\*" :op_ast] ; not op_mul, because it also means pointer/dereference
    ]
   )
 
@@ -80,8 +88,10 @@
    [#"^:" :colon]
    [#"^;" :semicolon]
    [#"^," :comma]
+   [#"^\?" :ques]
    ])
 
+;; TODO: other kinds of literals
 (def c-literal-patterns
   [[#"^[0-9]+" :dec_literal]
    [#"^0[Xx][0-9A-Fa-z]+(UuLl)*" :hex_literal]
