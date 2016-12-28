@@ -198,3 +198,20 @@
 (defn make-token-type-pred [coll]
   (fn [tok]
     (contains? coll (get-token-type tok))))
+
+
+;; Returns the token type of the first token in the given
+;; token sequence.  (This is the "next" token in the sense
+;; that it's the next token that will be consumed by parsing.)
+;; Throws an exception if the token sequence is empty.
+;;
+;; Parameters:
+;;   token-seq - sequence of tokens
+;;
+;; Returns:
+;;   the type (symbol) of the next token
+;;
+(defn next-token-type [token-seq]
+  (if (empty? token-seq)
+    (exc/throw-exception "Unexpected end of input")
+    (get-token-type (first token-seq))))

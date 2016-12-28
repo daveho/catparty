@@ -46,6 +46,7 @@
 
 (def c-operator-patterns
   [[#"^==" :op_eq]
+   [#"^=" :op_assign]
    [#"^<<=" :op_lshift_assign]
    [#"^<<" :op_lshift]
    [#"^<=" :op_lte]

@@ -80,17 +80,43 @@
   (into {} (map (fn [k] [k :left]) (keys binop-precedence))))
 
 
-(declare parse-cast-expression)
+(def is-literal?
+  (fn [t]
+    (let [pred (l/make-token-type-pred literals)
+          result (pred t)
+          lexeme (first t)]
+      ;(println lexeme (if result "is" "is not") "a literal")
+      result)))
+
+
+(defn parse-literal [token-seq & [ctx]]
+  ;(println "Parsing literal!")
+  (if (not (l/next-token-matches? token-seq is-literal?))
+    (exc/throw-exception "Expected literal")
+    (p/do-production :literal [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
+
+
+;; TODO: just a place holder for now (allowing only integer literals)
+(defn parse-cast-expression [token-seq & [ctx]]
+  (let [pr (p/do-production :cast_expression [parse-literal] token-seq ctx)]
+    (do
+      ;(println "After cast expression: " (:tokens pr))
+      pr)
+    ))
 
 
 (def c-infix-operators
   (p/Operators. binop-precedence binop-associativity parse-cast-expression))
 
 
-
 (defn parse-logical-or-expression [token-seq & [ctx]]
   (let [ctx2 (assoc ctx :operators c-infix-operators)]
-    (p/parse-infix-expression token-seq ctx2)))
+    (let [pr (p/parse-infix-expression token-seq ctx2)]
+      (do
+        ;(println "After infix parsing: " (:tokens pr))
+        pr
+        )
+      )))
 
 
 (declare parse-expression)
@@ -129,10 +155,12 @@
     ; See if there is an assignment operator
     (if (l/next-token-in? remaining assignment-operators)
       ; Continue production recursively.
-      (p/continue-production pr [(p/expect (l/get-token-type (first remaining)))
-                               parse-assignment-expression] token-seq ctx)
+      (p/continue-production pr [(p/expect (l/next-token-type remaining))
+                                 parse-assignment-expression] token-seq ctx)
       ; Production ends here
-      pr)))
+      (do
+        ;(println "After parsing assignment expression: " (:tokens pr))
+        pr))))
 
 
 (defn parse-expression [token-seq & [ctx]]
@@ -152,24 +180,10 @@
       ; Production continues recursively
       (p/continue-production pr [(p/expect :comma) parse-expression] ctx)
       ; Production ends here
-      pr)))
-
-
-(def is-literal? (l/make-token-type-pred literals))
-
-
-(defn parse-literal [token-seq & [ctx]]
-  (if (not (l/next-token-matches? token-seq is-literal?))
-    (exc/throw-exception "Expected literal")
-    (p/do-production :literal [(p/expect (l/get-token-type (first token-seq)))] token-seq ctx)))
-
-
-;; TODO: just a place holder for now (allowing only integer literals)
-(defn parse-cast-expression [token-seq & [ctx]]
-  (p/do-production :cast_expression [parse-literal] token-seq ctx)
-  )
-
-
+      (do
+        ;(println "Tokens after parsing expression: " (:tokens pr))
+        pr)
+      )))
 
 
 (defn parse-type-qualifier-list [token-seq & [ctx]]
@@ -251,9 +265,8 @@
   (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq))
 
 
-;; TODO: this is just a placeholder for now
 (defn parse-initializer [token-seq & [ctx]]
-  (p/do-production :initializer [(p/expect :dec_literal)] token-seq ctx))
+  (p/do-production :initializer [parse-assignment-expression] token-seq ctx))
 
 
 ;; TODO: this is just a placeholder for now
@@ -387,7 +400,17 @@
 ;; double *q[];")
 
 (def testprog
-"int f() {
-}")
+"
+int x;
+char *p;
+double *q[];
+int a = 2 + 3;
+int f()
+{
+}
+int b = 42 + 1 << 5;
+")
 
-(def t (parse (l/token-sequence (cl/create-from-string testprog))))
+
+(def token-seq (l/token-sequence (cl/create-from-string testprog)))
+(def t (parse token-seq))

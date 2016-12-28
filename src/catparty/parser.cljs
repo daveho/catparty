@@ -277,10 +277,11 @@
               next-primary-result (parse-primary (rest token-seq) ctx)
               ; Parsing the rhs is done in a separate function,
               ; which may involve recursive calls to parse-expression-1.
-              rhs-result (parse-rhs op next-primary-result (:tokens next-primary-result) ctx)]
+              rhs-result (parse-rhs op next-primary-result (:tokens next-primary-result) ctx)
+              remaining (:tokens rhs-result)]
           ; Combine lhs and rhs and continue parsing at the same precedence level
-          (recur (node/make-node (l/get-token-type op) [(:node lhs-result) (:node rhs-result)])
-                 (:tokens rhs-result)))))))
+          (let [n (node/make-node (l/get-token-type op) [(:node lhs-result) (:node rhs-result)])]
+            (recur (ParseResult. n remaining) remaining)))))))
 
 
 ;; Parse an infix expression using precedence climbing.
