@@ -247,7 +247,7 @@
 (declare parse-expression-1)
 
 
-(defn parse-rhs [op rhs-result token-seq ctx]
+(defn parse-rhs [op rhs-result ctx]
   (let [token-seq (:tokens rhs-result)
         ops (:operators ctx)
         precedence (:precedence ops)]
@@ -263,25 +263,25 @@
         (parse-expression-1 rhs-result lookahead-prec token-seq) ctx))))
 
 
-(defn parse-expression-1 [init-lhs-result min-precedence init-token-seq ctx]
+(defn parse-expression-1 [init-lhs-result min-precedence ctx]
   (let [ops (:operators ctx)
         parse-primary (:parse-primary ops)]
-    (loop [lhs-result init-lhs-result
-           token-seq init-token-seq]
-      ; See whether next token is an operator
-      (if (not (l/next-token-matches? token-seq (fn [t] (is-operator? t ops))))
-        ; Done, return lhs ParseResult
-        lhs-result
-        ; Get op and parse next primary expression
-        (let [op (first token-seq)
-              next-primary-result (parse-primary (rest token-seq) ctx)
-              ; Parsing the rhs is done in a separate function,
-              ; which may involve recursive calls to parse-expression-1.
-              rhs-result (parse-rhs op next-primary-result (:tokens next-primary-result) ctx)
-              remaining (:tokens rhs-result)]
-          ; Combine lhs and rhs and continue parsing at the same precedence level
-          (let [n (node/make-node (l/get-token-type op) [(:node lhs-result) (:node rhs-result)])]
-            (recur (ParseResult. n remaining) remaining)))))))
+    (loop [lhs-result init-lhs-result]
+      (let [token-seq (:tokens lhs-result)]
+        ; See whether next token is an operator
+        (if (not (l/next-token-matches? token-seq (fn [t] (is-operator? t ops))))
+          ; Done, return lhs ParseResult
+          lhs-result
+          ; Get op and parse next primary expression
+          (let [op (first token-seq)
+                next-primary-result (parse-primary (rest token-seq) ctx)
+                ; Parsing the rhs is done in a separate function,
+                ; which may involve recursive calls to parse-expression-1.
+                rhs-result (parse-rhs op next-primary-result ctx)
+                remaining (:tokens rhs-result)]
+            ; Combine lhs and rhs and continue parsing at the same precedence level
+            (let [n (node/make-node (l/get-token-type op) [(:node lhs-result) (:node rhs-result)])]
+              (recur (ParseResult. n remaining)))))))))
 
 
 ;; Parse an infix expression using precedence climbing.
@@ -300,4 +300,4 @@
   (let [ops (:operators ctx)
         parse-primary (:parse-primary ops)
         lhs-result (parse-primary token-seq ctx)]
-    (parse-expression-1 lhs-result 0 (:tokens lhs-result) ctx)))
+    (parse-expression-1 lhs-result 0 ctx)))
