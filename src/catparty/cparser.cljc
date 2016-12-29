@@ -108,7 +108,7 @@
 
 
 (def c-infix-operators
-  (p/Operators. binop-precedence binop-associativity parse-cast-expression))
+  (p/make-operators binop-precedence binop-associativity parse-cast-expression))
 
 
 (defn parse-logical-or-expression [token-seq & [ctx]]

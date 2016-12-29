@@ -217,6 +217,20 @@
 (defrecord Operators [precedence associativity parse-primary])
 
 
+;; Make an Operators object for parsing by precedence climbing.
+;;
+;; Parameters:
+;;   precedence - map of operator token types to precedence levels
+;;   associativity - map of operator token types to their associativity (:left or :right)
+;;   parse-primary - parse functin for parsing a primary expression
+;;
+;; Returns:
+;;   Operators object
+;;
+(defn make-operators [precedence associativity parse-primary]
+  (Operators. precedence associativity parse-primary))
+
+
 ;; Check whether given token is an operator.
 (defn is-operator? [token ops]
   (let [token-type (l/get-token-type token)]
