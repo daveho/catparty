@@ -1,3 +1,5 @@
+; -*- mode: clojure -*-
+
 (ns catparty.clexer
   (:require [catparty.lexer :as lex]))
 

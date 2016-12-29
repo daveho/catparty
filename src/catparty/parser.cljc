@@ -1,3 +1,5 @@
+; -*- mode: clojure -*-
+
 (ns catparty.parser
   (:require [catparty.lexer :as l]
             [catparty.node :as node]

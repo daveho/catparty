@@ -1,3 +1,5 @@
+; -*- mode: clojure -*-
+
 (ns catparty.node
   (:require [catparty.exc :as exc]))
 

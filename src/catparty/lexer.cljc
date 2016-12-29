@@ -1,3 +1,4 @@
+; -*- mode: clojure -*-
 
 (ns catparty.lexer
   (:require [catparty.exc :as exc]))

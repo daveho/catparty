@@ -1,3 +1,5 @@
+; -*- mode: clojure -*-
+
 (ns catparty.core
   (:require [clojure.browser.repl :as repl]))
 
