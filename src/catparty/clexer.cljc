@@ -96,12 +96,12 @@
 
 ;; TODO: other kinds of literals
 (def c-literal-patterns
-  [[#"^[0-9]+" :dec_literal]
+  [[#"^[0-9]+\.[0-9]*([Ee](\+|-)?[0-9+])?[fFlL]?" :fp_literal]
+   [#"^\.[0-9]+([Ee](\+|-)?[0-9+])?[fFlL]?" :fp_literal]
+   [#"^[0-9]+" :dec_literal]
    [#"^0[Xx][0-9A-Fa-z]+(UuLl)*" :hex_literal]
    [#"^'(\\([ntvbrfa\\?'\"]|[0-7][0-7][0-7]|[0-9A-Fa-f][0-9A-Fa-f])|[^\\'])'" :char_literal]
-   [#"^\"(\.|[^\"])\"" :string_literal]
-   ]
-  )
+   [#"^\"(\.|[^\"])\"" :string_literal]])
 
 (def c-all-patterns
   (concat c-keyword-patterns

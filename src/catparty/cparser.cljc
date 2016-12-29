@@ -37,7 +37,7 @@
 ;; Set of tokens that are literal values
 ;; TODO: others
 (def literals
-  #{:dec_literal :hex_literal})
+  #{:dec_literal :hex_literal :char_literal :string_literal})
 
 ;; Set of assignment operator tokens
 (def assignment-operators
