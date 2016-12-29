@@ -13,3 +13,4 @@ pom.xml.asc
 .hgignore
 .hg/
 /bin/
+/.settings/ccw.repl.cmdhistory.prefs
