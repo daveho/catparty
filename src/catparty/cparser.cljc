@@ -169,13 +169,6 @@
   ; State is:
   ;   expression -> ^ assignment-expression
   ;   expression -> ^ assignment-expression ',' expression
-  ; NOTE: this will parse the comma operator as right associative,
-  ; so we'll have to fix the resulting parse tree.
-  ; TODO: implement the restructuring of the parse tree.
-  ; TODO: there might be a way to do this by not using p/continue-production,
-  ; but rather using ad-hoc code to parse a comma-separated sequence
-  ; of assignment expressions and then transform the result into the
-  ; correct (left associative) parse tree.
   (let [pr (p/do-production :expression [parse-assignment-expression] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :comma)
