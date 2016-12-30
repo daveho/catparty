@@ -82,13 +82,7 @@
   (into {} (map (fn [k] [k :left]) (keys binop-precedence))))
 
 
-(def is-literal?
-  (fn [t]
-    (let [pred (l/make-token-type-pred literals)
-          result (pred t)
-          lexeme (first t)]
-      ;(println lexeme (if result "is" "is not") "a literal")
-      result)))
+(def is-literal? (l/make-token-type-pred literals))
 
 
 (defn parse-literal [token-seq & [ctx]]
