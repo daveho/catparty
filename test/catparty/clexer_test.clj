@@ -19,14 +19,12 @@
 ;; suffixes.
 (defn verify-with-suffixes [expected-lexeme expected-token-type suffixes]
   (and (verify-token expected-lexeme expected-token-type)
-       (every? identity (map (fn [sfx]
-                               (or (empty? sfx)
-                                   (verify-token (str expected-lexeme sfx) expected-token-type))) suffixes))))
+       (every? identity (map #(verify-token (str expected-lexeme %) expected-token-type) suffixes))))
 
 (defn int-suffixes []
-  (for [first ["" "u" "U"]
-        second ["" "l" "L" "ll" "LL"]]
-    (str first second)))
+  (filter #(not (empty? %)) (for [first ["" "u" "U"]
+                                 second ["" "l" "L" "ll" "LL"]]
+                             (str first second))))
 
 (defn verify-dec-literal [lexeme]
   (verify-with-suffixes lexeme :dec_literal (int-suffixes)))
