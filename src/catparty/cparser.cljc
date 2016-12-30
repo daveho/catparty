@@ -107,6 +107,7 @@
 
 (declare parse-cast-expression)
 (declare parse-expression)
+(declare parse-assignment-expression)
 
 
 ;; FIXME: just a placeholder for now, only allows literals
@@ -114,9 +115,24 @@
   (p/do-production :primary [parse-literal] token-seq ctx))
 
 
-;; FIXME: just a placeholder for now, doesn't allow any argument expressions
+(defn parse-argument-expression-list [token-seq & [ctx]]
+  ; parse initial argument expression
+  (let [pr (p/do-production :argument_expression_list [parse-assignment-expression] token-seq ctx)
+        remaining (:tokens pr)]
+    ; See if there are more argument expressions
+    (if (l/next-token-is? remaining :rparen)
+      ; reached end, we're done
+      pr
+      ; there is at least one more argument expression
+      (p/continue-production pr [(p/expect :comma) parse-argument-expression-list] token-seq ctx))))
+
+
 (defn parse-opt-argument-expression-list [token-seq & [ctx]]
-  (p/do-production :opt_argument_expression_list [] token-seq ctx))
+  (if (l/next-token-is? token-seq :rparen)
+    ; no argument expressions, so just apply epsilon production
+    (p/do-production :opt_argument_expression_list [] token-seq ctx)
+    ; there is at least one argument expression
+    (p/do-production :opt_argument_expression_list [parse-argument-expression-list] token-seq ctx)))
 
 
 (defn parse-postfix-suffix [token-seq & [ctx]]
