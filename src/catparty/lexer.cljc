@@ -1,7 +1,8 @@
 ; -*- mode: clojure -*-
 
 (ns catparty.lexer
-  (:require [catparty.exc :as exc]))
+  (:require [catparty.exc :as exc]
+            [clojure.string :as str]))
 
 ;; Generic lexer module.
 ;; All that language-specific lexers need to provide is a sequence
@@ -34,7 +35,7 @@
 (defn recognize-token [lexer]
   ; Trim leading whitespace
   (let [raw-line (:line lexer)               ; raw line before trimming leading ws
-        line (clojure.string/triml raw-line) ; line after trimming leading ws
+        line (str/triml raw-line) ; line after trimming leading ws
         ntrim (- (count raw-line) (count line)) ; number of ws characters trimmed
         cnum (+ (:cnum lexer) ntrim)         ; character number in line of start of token
         ]
@@ -64,7 +65,7 @@
     ; If there are no more lines, then leave tok nil (to signal end of stream)
     (nil? (:line lexer)) lexer
     ; If current line is empty, read another line and recur
-    (empty? (clojure.string/trim (:line lexer))) (recur (fill-line lexer))
+    (empty? (str/trim (:line lexer))) (recur (fill-line lexer))
     ; A nonempty line is available: call recognize-token
     :else (recognize-token lexer)))
 
@@ -76,7 +77,7 @@
 (defn create-from-string
   "Create a lexer from an input string and sequence of patterns."
   [s pats]
-  (let [lines (clojure.string/split s #"\n")]
+  (let [lines (str/split s #"\n")]
     (create-from-lines lines pats)))
 
 ;; Determine whether lexer is at end of file.
