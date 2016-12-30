@@ -64,7 +64,7 @@
    [#"^\|" :op_bit_or]
    [#"^&&" :op_and]
    [#"^&=" :op_bit_and_assign]
-   [#"^&" :op_bit_and]
+   [#"^&" :op_amp] ; note that this means bitwise-and and address-of
    [#"^\^=" :op_bit_xor_assign]
    [#"^\^" :op_bit_xor]
    [#"^~" :op_bit_compl]

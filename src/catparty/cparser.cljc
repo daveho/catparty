@@ -46,6 +46,10 @@
     :op_bit_xor_assign :op_plus_assign :op_minus_assign :op_mul_assign :op_div_assign
     :op_mod_assign})
 
+;; Unary operators
+(def unary-operators
+  #{:op_amp :op_star :op_plus :op_minus :op_bit_compl :op_not})
+
 ;; Binary operator precedences:
 ;; note that comma, assignment, and conditionals (?:) are
 ;; not parsed by precedence climbing because the conditional
@@ -58,7 +62,7 @@
    :op_and 1,
    :op_bit_or 2,
    :op_bit_xor 3,
-   :op_bit_and 4,
+   :op_amp 4, ; not called :op_bit_and because it also means "address of" 
    :op_eq 5,
    :op_ne 5,
    :op_lt 6,
@@ -93,9 +97,20 @@
     (p/do-production :literal [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
 
 
-;; FIXME: just a placeholder for now (only permits literals)
+(declare parse-cast-expression)
+
+
+;; FIXME: just a placeholder for now, only allows literals
+(defn parse-postfix-expression [token-seq & [ctx]]
+  (p/do-production :postfix_expression [parse-literal] token-seq ctx))
+
+
+;; TODO: should handle sizeof
 (defn parse-unary-expression [token-seq & [ctx]]
-  (p/do-production :unary_expression [parse-literal] token-seq ctx))
+  (if (l/next-token-in? token-seq unary-operators)
+    (p/do-production :unary_expression [(p/expect (l/next-token-type token-seq))
+                                        parse-cast-expression] token-seq ctx)
+    (p/do-production :unary_expression [parse-postfix-expression] token-seq ctx)))
 
 
 ;; FIXME: this is just a placeholder fo now: it just parses a sequence of
@@ -396,11 +411,6 @@
 
 ;; Just for testing...
 
-;; (def testprog
-;; "int x;
-;; char *p;
-;; double *q[];")
-
 (def testprog
 "
 int x;
@@ -412,6 +422,8 @@ int f()
 }
 int b = 42 + 1 << 5;
 long c = (long) 17;
+int d = 8989 & 3;
+int e = ~-15;
 ")
 
 
