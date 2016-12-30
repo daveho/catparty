@@ -97,8 +97,9 @@
 (def c-literal-patterns
   [[#"^[0-9]+\.[0-9]*([Ee](\+|-)?[0-9+])?[fFlL]?" :fp_literal]
    [#"^\.[0-9]+([Ee](\+|-)?[0-9+])?[fFlL]?" :fp_literal]
-   [#"^[0-9]+(u|U)?(ll|LL)?" :dec_literal]
-   [#"^[0-9]+(u|U)?(l|L)?" :dec_literal]
+   [#"^[0-9]+(u|U)?(ll|LL)" :dec_literal]
+   [#"^[0-9]+(u|U)?(l|L)" :dec_literal]
+   [#"^[0-9]+(u|U)?" :dec_literal]
    [#"^0[Xx][0-9A-Fa-f]+(u|U)?(ll|LL)?" :hex_literal]
    [#"^0[Xx][0-9A-Fa-f]+(u|U)?(l|L)?" :hex_literal]
    [#"^'(\\([ntvbrfa\\?'\"]|[0-7][0-7][0-7]|[0-9A-Fa-f][0-9A-Fa-f])|[^\\'])'" :char_literal]
