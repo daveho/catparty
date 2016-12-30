@@ -58,6 +58,11 @@
 (def postfix-suffix-start-tokens
   (set/union #{:lbracket :lparen :op_dot :op_arrow} inc-dec-operators))
 
+;; Tokens that can start a declaration.
+;; FIXME: need to handle typedef names.
+(def declaration-start-tokens
+  (set/union type-specifiers-and-qualifiers #{:kw_struct :kw_union}))
+
 ;; Binary operator precedences:
 ;; note that comma, assignment, and conditionals (?:) are
 ;; not parsed by precedence climbing because the conditional
@@ -375,9 +380,47 @@
   (p/do-production :initializer [parse-assignment-expression] token-seq ctx))
 
 
+(declare parse-declaration)
+
+
+;; FIXME: this is just a placeholder for now
+(defn parse-statement [token-seq & [ctx]]
+  (p/do-production :statement [(p/expect :semicolon)] token-seq ctx))
+
+
+;; Another interesting point in the parser: distinguishing statements
+;; from declarations (since we want to support the C99 feature
+;; of allowing declarations and statements to appear in any order.)
+(defn parse-block-item [token-seq & [ctx]]
+  (if (l/next-token-in? token-seq declaration-start-tokens)
+    (p/do-production :block_item [parse-declaration] token-seq ctx)
+    (p/do-production :block_item [parse-statement] token-seq ctx)))
+
+
+(defn parse-block-item-list [token-seq & [ctx]]
+  (let [pr (p/do-production :block_item_list [parse-block-item] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-is? remaining :rbrace)
+      ; end of block item list
+      pr
+      ; there is at least one more block item
+      (p/continue-production pr [parse-block-item-list] token-seq ctx))))
+
+
+(defn parse-opt-block-item-list [token-seq & [ctx]]
+  (if (l/next-token-is? token-seq :rbrace)
+    ; empty block
+    (p/do-production :opt_block_item_list [] token-seq ctx)
+    ; there is at least one block item
+    (p/do-production :opt_block_item_list [parse-block-item-list] token-seq ctx)))
+  
+
+
 ;; TODO: this is just a placeholder for now
 (defn parse-compound-statement [token-seq & [ctx]]
-  (p/do-production :compound_statement [(p/expect :lbrace) (p/expect :rbrace)] token-seq ctx))
+  (p/do-production :compound_statement [(p/expect :lbrace)
+                                        parse-opt-block-item-list
+                                        (p/expect :rbrace)] token-seq ctx))
 
 
 ;; Ok, here is a complicated part of the parser.
@@ -508,6 +551,8 @@ double *q[];
 int a = 2 + 3;
 int f()
 {
+    int q;
+    ;
 }
 int b = 42 + 1 << 5;
 long c = (long) 17;
