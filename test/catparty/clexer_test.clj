@@ -50,6 +50,9 @@
     (is (verify-hex-literal "0x0"))
     (is (verify-hex-literal "0x01234567"))
     (is (verify-hex-literal "0x89ABCDEF"))
+    (is (verify-hex-literal "0X0"))
+    (is (verify-hex-literal "0X01234567"))
+    (is (verify-hex-literal "0X89ABCDEF"))
     ))
 
 (deftest char-literal-test
