@@ -50,6 +50,14 @@
 (def unary-operators
   #{:op_amp :op_star :op_plus :op_minus :op_bit_compl :op_not})
 
+;; Increment and decrement operators
+(def inc-dec-operators
+  #{:op_inc :op_dec})
+
+;; Tokens that can start a postfix suffix
+(def postfix-suffix-start-tokens
+  (set/union #{:lbracket :lparen :op_dot :op_arrow} inc-dec-operators))
+
 ;; Binary operator precedences:
 ;; note that comma, assignment, and conditionals (?:) are
 ;; not parsed by precedence climbing because the conditional
@@ -98,18 +106,83 @@
 
 
 (declare parse-cast-expression)
+(declare parse-expression)
 
 
 ;; FIXME: just a placeholder for now, only allows literals
+(defn parse-primary [token-seq & [ctx]]
+  (p/do-production :primary [parse-literal] token-seq ctx))
+
+
+;; FIXME: just a placeholder for now, doesn't allow any argument expressions
+(defn parse-opt-argument-expression-list [token-seq & [ctx]]
+  (p/do-production :opt_argument_expression_list [] token-seq ctx))
+
+
+(defn parse-postfix-suffix [token-seq & [ctx]]
+  (cond
+    ; Array subscript
+    (l/next-token-is? token-seq :lbracket)
+    (p/do-production :array_subscript [(p/expect :lbracket) parse-expression (p/expect :rbracket)] token-seq ctx)
+    
+    ; Function call
+    (l/next-token-is? token-seq :lparen)
+    (p/do-production :function_call [(p/expect :lparen)
+                                     parse-opt-argument-expression-list
+                                     (p/expect :rparen)] token-seq ctx)
+    
+    ; Member access
+    (l/next-token-is? token-seq :op_dot)
+    (p/do-production :member_access [(p/expect :op_dot) (p/expect :identifier)] token-seq ctx)
+    
+    ; Indirect member access
+    (l/next-token-is? token-seq :op_arrow)
+    (p/do-production :indirect_member_access [(p/expect :op_arrow) (p/expect :identifier)] token-seq ctx)
+    
+    ; Post-increment
+    (l/next-token-is? token-seq :op_inc)
+    (p/do-production :post_increment [(p/expect :op_inc)] token-seq ctx)
+    
+    ; Post-decrement
+    (l/next-token-is? token-seq :op_dec)
+    (p/do-production :post_decrement [(p/expect :op_dec)] token-seq ctx)
+    
+    ; This should not happen
+    :else (exc/throw-exception "Invalid postfix suffix")))
+
+
+(defn parse-postfix-suffix-list [token-seq & [ctx]]
+  (let [pr (p/do-production :postfix_suffix_list [parse-postfix-suffix] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-in? token-seq postfix-suffix-start-tokens)
+      ; continue recursively
+      (p/continue-production pr [parse-postfix-suffix-list] ctx)
+      ; done
+      pr)))
+
+
 (defn parse-postfix-expression [token-seq & [ctx]]
-  (p/do-production :postfix_expression [parse-literal] token-seq ctx))
+  (let [pr (p/do-production :postfix_expression [parse-primary] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-in? token-seq postfix-suffix-start-tokens)
+      ; parse one or more postfix suffixes
+      (p/continue-production pr [parse-postfix-suffix-list] ctx)
+      ; no postfix suffixes
+      pr)))
 
 
 ;; TODO: should handle sizeof
 (defn parse-unary-expression [token-seq & [ctx]]
-  (if (l/next-token-in? token-seq unary-operators)
+  (cond
+    (l/next-token-in? token-seq unary-operators)
     (p/do-production :unary_expression [(p/expect (l/next-token-type token-seq))
                                         parse-cast-expression] token-seq ctx)
+    
+    (l/next-token-in? token-seq inc-dec-operators)
+    (p/do-production :unary_expression [(p/expect (l/next-token-type token-seq))
+                                        parse-unary-expression] token-seq ctx)
+    
+    :else
     (p/do-production :unary_expression [parse-postfix-expression] token-seq ctx)))
 
 

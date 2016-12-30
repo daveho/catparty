@@ -69,8 +69,11 @@
    [#"^\^" :op_bit_xor]
    [#"^~" :op_bit_compl]
    [#"^\+=" :op_plus_assign]
+   [#"^\+\+" :op_inc]
    [#"^\+" :op_plus]
    [#"^-=" :op_minus_assign]
+   [#"^--" :op_dec]
+   [#"^->" :op_arrow]
    [#"^-" :op_minus]
    [#"^\*=" :op_mul_assign]
    [#"^\*" :op_star] ; note that this means multiplication and pointer/dereference
@@ -78,8 +81,7 @@
    [#"^/" :op_div]
    [#"^%=" :op_mod_assign]
    [#"^%" :op_mod]
-   ]
-  )
+   [#"^\." :op_dot]])
 
 (def c-punct-patterns
   [[#"^\(" :lparen]
