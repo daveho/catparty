@@ -19,29 +19,37 @@
 ;; suffixes.
 (defn verify-with-suffixes [expected-lexeme expected-token-type suffixes]
   (and (verify-token expected-lexeme expected-token-type)
-       (every? identity (map (fn [sfx] (verify-token (str expected-lexeme sfx) expected-token-type))
-                             suffixes))
-       
-       ))
+       (every? identity (map (fn [sfx]
+                               (or (empty? sfx)
+                                   (verify-token (str expected-lexeme sfx) expected-token-type))) suffixes))))
 
-(defn dec-suffixes []
+(defn int-suffixes []
   (for [first ["" "u" "U"]
         second ["" "l" "L" "ll" "LL"]]
     (str first second)))
 
 (defn verify-dec-literal [lexeme]
-  (verify-with-suffixes lexeme :dec_literal (dec-suffixes)))
+  (verify-with-suffixes lexeme :dec_literal (int-suffixes)))
 
 (defn verify-fp-literal [lexeme]
   (verify-with-suffixes lexeme :fp_literal ["f" "F" "l" "L"]))
 
-
-;; Verify that a lexeme is scanned as a decimal integer literal,
-;; trying all of the legal suffixes.
+(defn verify-hex-literal [lexeme]
+  (verify-with-suffixes lexeme :hex_literal (int-suffixes)))
 
 (deftest dec-literal-test
   (testing "decimal integer literals"
     (is (verify-dec-literal "4"))
+    (is (verify-dec-literal "404"))
+    (is (verify-dec-literal "01234567"))
+    (is (verify-dec-literal "8989"))
+    ))
+
+(deftest hex-literal-test
+  (testing "hex integer literals"
+    (is (verify-hex-literal "0x0"))
+    (is (verify-hex-literal "0x01234567"))
+    (is (verify-hex-literal "0x89ABCDEF"))
     ))
 
 (deftest char-literal-test
