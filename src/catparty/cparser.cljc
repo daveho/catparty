@@ -26,6 +26,8 @@
 (def type-qualifiers
   #{:kw_const :kw_restrict :kw_volatile})
 
+(def type-specifiers-and-qualifiers (set/union type-specifiers type-qualifiers))
+
 ;; Set of tokens that can begin a declarator
 (def declarator-start-tokens
   #{:identifier :lparen :op_star})
@@ -35,7 +37,6 @@
   #{:lparen :lbracket})
 
 ;; Set of tokens that are literal values
-;; TODO: others
 (def literals
   #{:fp_literal :dec_literal :hex_literal :char_literal :string_literal})
 
@@ -92,13 +93,25 @@
     (p/do-production :literal [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
 
 
+;; FIXME: just a placeholder for now (only permits literals)
+(defn parse-unary-expression [token-seq & [ctx]]
+  (p/do-production :unary_expression [parse-literal] token-seq ctx))
+
+
+;; FIXME: this is just a placeholder fo now: it just parses a sequence of
+;; type specifiers and type qualifiers
+(defn parse-type-name [token-seq & [ctx]]
+  (p/accept-matching :type_name (l/make-token-type-pred type-specifiers-and-qualifiers) token-seq))
+
+
 ;; TODO: just a place holder for now (allowing only integer literals)
 (defn parse-cast-expression [token-seq & [ctx]]
-  (let [pr (p/do-production :cast_expression [parse-literal] token-seq ctx)]
-    (do
-      ;(println "After cast expression: " (:tokens pr))
-      pr)
-    ))
+  (if (l/next-token-is? token-seq :lparen)
+    (p/do-production :cast_expression [(p/expect :lparen)
+                                       parse-type-name
+                                       (p/expect :rparen)
+                                       parse-cast-expression] token-seq ctx)
+    (p/do-production :cast_expression [parse-unary-expression] token-seq ctx)))
 
 
 (def c-infix-operators
@@ -398,6 +411,7 @@ int f()
 {
 }
 int b = 42 + 1 << 5;
+long c = (long) 17;
 ")
 
 
