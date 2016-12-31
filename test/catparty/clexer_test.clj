@@ -35,6 +35,9 @@
 (defn verify-hex-literal [lexeme]
   (verify-with-suffixes lexeme :hex_literal (int-suffixes)))
 
+(defn verify-string-literal [lexeme]
+  (verify-token lexeme :string_literal))
+
 (deftest dec-literal-test
   (testing "decimal integer literals"
     (is (verify-dec-literal "4"))
@@ -68,4 +71,9 @@
     (is (verify-fp-literal "2.3e5"))
     (is (verify-fp-literal "2.3e+5"))
     (is (verify-fp-literal "2.3e-5"))
+    ))
+
+(deftest string-literal-test
+  (testing "string literals"
+    (is (verify-string-literal "\"\""))
     ))

@@ -104,14 +104,14 @@
    [#"^[0-9]+(u|U)?(ll|LL)" :dec_literal]
    [#"^[0-9]+(u|U)?(l|L)?" :dec_literal]
    [#"^'(\\([ntvbrfa\\?'\"]|[0-7][0-7][0-7]|[0-9A-Fa-f][0-9A-Fa-f])|[^\\'])'" :char_literal]
-   [#"^\"(\.|[^\"])\"" :string_literal]])
+   [#"^\"(\.|[^\"])*\"" :string_literal]])
 
 (def c-all-patterns
   (concat c-keyword-patterns
           c-identifier-pattern
+          c-literal-patterns  ; must be before operators (otherwise, e.g., ".3" is scanned incorrectly)
           c-operator-patterns
-          c-punct-patterns
-          c-literal-patterns))
+          c-punct-patterns))
 
 (defn create-from-lines
   "Create a C lexer from sequence of lines."
