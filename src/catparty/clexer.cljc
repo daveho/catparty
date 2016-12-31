@@ -81,6 +81,7 @@
    [#"^/" :op_div]
    [#"^%=" :op_mod_assign]
    [#"^%" :op_mod]
+   [#"^\.\.\." :op_ellipsis]
    [#"^\." :op_dot]])
 
 (def c-punct-patterns
