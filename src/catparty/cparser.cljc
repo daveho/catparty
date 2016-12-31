@@ -405,6 +405,10 @@
   (p/do-production :case_statement [(p/expect :kw_case) parse-expression (p/expect :colon) parse-statement] token-seq ctx))
 
 
+(defn parse-default-statement [token-seq ctx]
+  (p/do-production :default_statement [(p/expect :kw_default) (p/expect :colon)] token-seq ctx))
+
+
 (defn parse-statement [token-seq ctx]
   (cond
     (l/next-token-is? token-seq :lbrace) (p/do-production :statement [parse-compound-statement] token-seq ctx)
@@ -412,6 +416,7 @@
     (l/next-token-is? token-seq :kw_if) (p/do-production :statement [parse-while-statement] token-seq ctx)
     (l/next-tokens-are? token-seq [:identifier :colon]) (p/do-production [parse-labeled-statement] token-seq ctx)
     (l/next-token-is? token-seq :kw_case) (p/do-production :statement [parse-case-statement] token-seq ctx)
+    (l/next-token-is? token-seq :hw_default) (p/do-production [parse-default-statement] token-seq ctx)
     (l/next-token-is? token-seq :semicolon) (p/do-production :statement [(p/expect :semicolon)] token-seq ctx)
     :else (exc/throw-exception "Unknown statement type")
   ))
@@ -443,14 +448,16 @@
     (p/do-production :opt_block_item_list [] token-seq ctx)
     ; there is at least one block item
     (p/do-production :opt_block_item_list [parse-block-item-list] token-seq ctx)))
-  
 
 
-;; TODO: this is just a placeholder for now
+;; Parse compound statement (block).
+;; Note that because C doesn't allow nested functions,
+;; function definitions are not allowed inside
+;; a block.
 (defn parse-compound-statement [token-seq ctx]
   (p/do-production :compound_statement [(p/expect :lbrace)
                                         parse-opt-block-item-list
-                                        (p/expect :rbrace)] token-seq ctx))
+                                        (p/expect :rbrace)] token-seq (dissoc ctx :allow_func)))
 
 
 ;; Ok, here is a complicated part of the parser.
