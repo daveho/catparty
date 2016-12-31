@@ -410,7 +410,7 @@
     (l/next-token-is? token-seq :lbrace) (p/do-production :statement [parse-compound-statement] token-seq ctx)
     (l/next-token-is? token-seq :kw_while) (p/do-production :statement [parse-while-statement] token-seq ctx)
     (l/next-token-is? token-seq :kw_if) (p/do-production :statement [parse-while-statement] token-seq ctx)
-    ;(l/next-tokens-are? token-seq [:identifier :colon]) (p/do-production [parse-labeled-statement] token-seq ctx)
+    (l/next-tokens-are? token-seq [:identifier :colon]) (p/do-production [parse-labeled-statement] token-seq ctx)
     (l/next-token-is? token-seq :kw_case) (p/do-production :statement [parse-case-statement] token-seq ctx)
     (l/next-token-is? token-seq :semicolon) (p/do-production :statement [(p/expect :semicolon)] token-seq ctx)
     :else (exc/throw-exception "Unknown statement type")
