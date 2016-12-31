@@ -409,6 +409,19 @@
   (p/do-production :default_statement [(p/expect :kw_default) (p/expect :colon) parse-statement] token-seq ctx))
 
 
+(defn parse-if-statement [token-seq ctx]
+  (let [pr (p/do-production :if_statement [(p/expect :kw_if)
+                                           (p/expect :lparen) parse-expression (p/expect :rparen)
+                                           parse-statement] token-seq ctx)
+        remaining (:tokens pr)]
+    ; See if there is an else clause
+    (if (l/next-token-is? remaining :kw_else)
+      ; Continue by parsing the else clause
+      (p/continue-production pr [(p/expect :kw_else) parse-statement] ctx)
+      ; No else clause, so we're done
+      pr)))
+
+
 (defn parse-statement [token-seq ctx]
   (cond
     (l/next-token-is? token-seq :lbrace) (p/do-production :statement [parse-compound-statement] token-seq ctx)
