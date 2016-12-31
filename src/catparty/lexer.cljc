@@ -146,6 +146,7 @@
 (defn next-token-is? [token-seq symbol]
   (next-token-matches? token-seq (fn [[lexeme tsym]] (= tsym symbol))))
 
+
 ;; Check to see whether the next token's grammar symbol is
 ;; contained in the specified collection.
 ;;
@@ -217,3 +218,23 @@
   (if (empty? token-seq)
     (exc/throw-exception "Unexpected end of input")
     (get-token-type (first token-seq))))
+
+
+;; Check whether the next tokens match the specified grammar symbols.
+;;
+;; Parameters:
+;;   token-seq - the input token sequence
+;;   symbols - sequence of terminal symbols
+;;
+;; Returns:
+;;   true if there are at least as many tokens as symbols, and
+;;   the token types match the symbols, false otherwise
+;;
+(defn next-tokens-are? [token-seq symbols]
+  (loop [syms symbols
+         remaining token-seq]
+    (cond
+      (empty? syms) true
+      (empty? remaining) false
+      (not (= (get-token-type (first remaining)) (first syms))) false
+      :else (recur (rest syms) (rest remaining)))))

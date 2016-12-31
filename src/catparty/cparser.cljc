@@ -175,7 +175,7 @@
 (defn parse-postfix-suffix-list [token-seq & [ctx]]
   (let [pr (p/do-production :postfix_suffix_list [parse-postfix-suffix] token-seq ctx)
         remaining (:tokens pr)]
-    (if (l/next-token-in? token-seq postfix-suffix-start-tokens)
+    (if (l/next-token-in? remaining postfix-suffix-start-tokens)
       ; continue recursively
       (p/continue-production pr [parse-postfix-suffix-list] ctx)
       ; done
@@ -381,11 +381,41 @@
 
 
 (declare parse-declaration)
+(declare parse-statement)
+(declare parse-compound-statement)
 
 
-;; FIXME: this is just a placeholder for now
+(defn parse-while-statement [token-seq & [ctx]]
+  (p/do-production :while_statement [(p/expect :kw_while)
+                                     (p/expect :lparen) parse-expression (p/expect :rparen)
+                                     parse-statement] token-seq ctx))
+
+
+(defn parse-if-statement [token-seq & [ctx]]
+  (p/do-production :if_statement [(p/expect :kw_if)
+                                  (p/expect :lparen) parse-expression (p/expect :rparen)
+                                  parse-statement] token-seq ctx))
+
+
+(defn parse-labeled-statement [token-seq & [ctx]]
+  (p/do-production :labeled_statement [(p/expect :identifier) (p/expect :colon) parse-statement] token-seq ctx))
+
+
+(defn parse-case-statement [token-seq & [ctx]]
+  (p/do-production :case_statement [(p/expect :kw_case) parse-expression (p/expect :colon) parse-statement] token-seq ctx))
+
+
 (defn parse-statement [token-seq & [ctx]]
-  (p/do-production :statement [(p/expect :semicolon)] token-seq ctx))
+  (cond
+    (l/next-token-is? token-seq :lbrace) (p/do-production :statement [parse-compound-statement] token-seq ctx)
+    (l/next-token-is? token-seq :kw_while) (p/do-production :statement [parse-while-statement] token-seq ctx)
+    (l/next-token-is? token-seq :kw_if) (p/do-production :statement [parse-while-statement] token-seq ctx)
+    ;(l/next-tokens-are? token-seq [:identifier :colon]) (p/do-production [parse-labeled-statement] token-seq ctx)
+    (l/next-token-is? token-seq :kw_case) (p/do-production :statement [parse-case-statement] token-seq ctx)
+    (l/next-token-is? token-seq :semicolon) (p/do-production :statement [(p/expect :semicolon)] token-seq ctx)
+    :else (exc/throw-exception "Unknown statement type")
+  ))
+;  (p/do-production :statement [(p/expect :semicolon)] token-seq ctx))
 
 
 ;; Another interesting point in the parser: distinguishing statements
