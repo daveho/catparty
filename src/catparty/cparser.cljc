@@ -422,18 +422,37 @@
       pr)))
 
 
+(defn parse-switch-statement [token-seq ctx]
+  (p/do-production :switch_statement [(p/expect :kw_switch)
+                                      (p/expect :lparen) parse-expression (p/expect :rparen)
+                                      parse-statement] token-seq ctx))
+
+
+(defn parse-empty-statement [token-seq ctx]
+  (p/do-production :empty_statement [(p/expect :semicolon)] token-seq ctx))
+
+
+(defn parse-expression-statement [token-seq ctx]
+  (p/do-production :expression_statement [parse-expression (p/expect :semicolon)] token-seq ctx))
+
+
 (defn parse-statement [token-seq ctx]
-  (cond
-    (l/next-token-is? token-seq :lbrace) (p/do-production :statement [parse-compound-statement] token-seq ctx)
-    (l/next-token-is? token-seq :kw_while) (p/do-production :statement [parse-while-statement] token-seq ctx)
-    (l/next-token-is? token-seq :kw_if) (p/do-production :statement [parse-while-statement] token-seq ctx)
-    (l/next-tokens-are? token-seq [:identifier :colon]) (p/do-production [parse-labeled-statement] token-seq ctx)
-    (l/next-token-is? token-seq :kw_case) (p/do-production :statement [parse-case-statement] token-seq ctx)
-    (l/next-token-is? token-seq :hw_default) (p/do-production [parse-default-statement] token-seq ctx)
-    (l/next-token-is? token-seq :semicolon) (p/do-production :statement [(p/expect :semicolon)] token-seq ctx)
-    :else (exc/throw-exception "Unknown statement type")
-  ))
-;  (p/do-production :statement [(p/expect :semicolon)] token-seq ctx))
+  (if (empty? token-seq)
+    (exc/throw-exception "Unexpected end of input")
+    (let [tt (l/get-token-type (first token-seq))]
+      (case tt
+        :lbrace (p/do-production :statement [parse-compound-statement] token-seq ctx)
+        :kw_while (p/do-production :statement [parse-while-statement] token-seq ctx)
+        :kw_if (p/do-production :statement [parse-if-statement] token-seq ctx)
+        :kw_switch (p/do-production :statement [parse-switch-statement] token-seq ctx)
+        :kw_case (p/do-production :statement [parse-case-statement] token-seq ctx)
+        :kw_default (p/do-production [parse-default-statement] token-seq ctx)
+        :semicolon (p/do-production :statement [parse-empty-statement] token-seq ctx)
+        ; Labeled statements require two tokens of lookahead
+        (if (l/next-tokens-are? token-seq [:identifier :colon])
+          (p/do-production [parse-labeled-statement] token-seq ctx)
+          ; Default is to parse an expression statement
+          (p/do-production [parse-expression-statement] token-seq ctx))))))
 
 
 ;; Another interesting point in the parser: distinguishing statements
