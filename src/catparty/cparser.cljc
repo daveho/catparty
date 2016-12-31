@@ -105,9 +105,12 @@
 
 (defn parse-literal [token-seq ctx]
   ;(println "Parsing literal!")
-  (if (not (l/next-token-matches? token-seq is-literal?))
-    (exc/throw-exception "Expected literal")
-    (p/do-production :literal [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
+  (if (empty? token-seq)
+    (exc/throw-exception "Unexpected end of input")
+    (let [tt (l/next-token-type token-seq)]
+      (if (not (l/next-token-matches? token-seq is-literal?))
+        (exc/throw-exception (str "Expected literal, saw " tt))
+        (p/do-production :literal [(p/expect tt)] token-seq ctx)))))
 
 
 (declare parse-cast-expression)
@@ -117,7 +120,13 @@
 
 ;; FIXME: just a placeholder for now, only allows literals
 (defn parse-primary [token-seq ctx]
-  (p/do-production :primary [parse-literal] token-seq ctx))
+  (if (empty? token-seq)
+    (exc/throw-exception "Unexpected end of input")
+    (let [tt (l/next-token-type token-seq)]
+      (case tt
+        :lparen (p/do-production :primary [(p/expect :lparen) parse-expression (p/expect :rparen)] token-seq ctx)
+        :identifier (p/do-production :primary [(p/expect :identifier)] token-seq ctx)
+        (p/do-production :primary [parse-literal] token-seq ctx)))))
 
 
 (defn parse-argument-expression-list [token-seq ctx]
@@ -450,9 +459,9 @@
         :semicolon (p/do-production :statement [parse-empty-statement] token-seq ctx)
         ; Labeled statements require two tokens of lookahead
         (if (l/next-tokens-are? token-seq [:identifier :colon])
-          (p/do-production [parse-labeled-statement] token-seq ctx)
+          (p/do-production :statement [parse-labeled-statement] token-seq ctx)
           ; Default is to parse an expression statement
-          (p/do-production [parse-expression-statement] token-seq ctx))))))
+          (p/do-production :statement [parse-expression-statement] token-seq ctx))))))
 
 
 ;; Another interesting point in the parser: distinguishing statements
@@ -614,21 +623,21 @@
 
 (def testprog
 "
-int x;
-char *p;
-double *q[];
-int a = 2 + 3;
 int f()
 {
     int q;
-    ;
+    h;
 }
-int b = 42 + 1 << 5;
-long c = (long) 17;
-int d = 8989 & 3;
-int e = ~-15;
 ")
 
+;int x;
+;char *p;
+;double *q[];
+;int a = 2 + 3;
+;int b = 42 + 1 << 5;
+;long c = (long) 17;
+;int d = 8989 & 3;
+;int e = ~-15;
 
 (def token-seq (l/token-sequence (cl/create-from-string testprog)))
 (def t (parse token-seq))
