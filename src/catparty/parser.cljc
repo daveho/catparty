@@ -62,7 +62,7 @@
 ;; terminal parse node and the remaining input tokens.
 ;;
 (defn expect [expected-token-type]
-  (fn [token-seq & [ctx]]
+  (fn [token-seq ctx]
     ; Check to see if there are more tokens
     (if (empty? token-seq)
       ; No more tokens
@@ -171,7 +171,7 @@
 ;; resulting from applying the symbol application functions, and
 ;; the remaining input tokens.
 ;;
-(defn continue-production [parse-result rhs & [ctx]]
+(defn continue-production [parse-result rhs ctx]
   (let [symbol (:symbol parse-result)]
     (loop [result parse-result
            fns rhs]
@@ -197,7 +197,7 @@
 ;;
 ;; Returns: a ParseResult
 ;;
-(defn do-production [nonterminal rhs token-seq & [ctx]]
+(defn do-production [nonterminal rhs token-seq ctx]
   (continue-production (initial-parse-result nonterminal token-seq) rhs ctx))
 
 

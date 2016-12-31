@@ -103,7 +103,7 @@
 (def is-literal? (l/make-token-type-pred literals))
 
 
-(defn parse-literal [token-seq & [ctx]]
+(defn parse-literal [token-seq ctx]
   ;(println "Parsing literal!")
   (if (not (l/next-token-matches? token-seq is-literal?))
     (exc/throw-exception "Expected literal")
@@ -116,11 +116,11 @@
 
 
 ;; FIXME: just a placeholder for now, only allows literals
-(defn parse-primary [token-seq & [ctx]]
+(defn parse-primary [token-seq ctx]
   (p/do-production :primary [parse-literal] token-seq ctx))
 
 
-(defn parse-argument-expression-list [token-seq & [ctx]]
+(defn parse-argument-expression-list [token-seq ctx]
   ; parse initial argument expression
   (let [pr (p/do-production :argument_expression_list [parse-assignment-expression] token-seq ctx)
         remaining (:tokens pr)]
@@ -132,7 +132,7 @@
       (p/continue-production pr [(p/expect :comma) parse-argument-expression-list] token-seq ctx))))
 
 
-(defn parse-opt-argument-expression-list [token-seq & [ctx]]
+(defn parse-opt-argument-expression-list [token-seq ctx]
   (if (l/next-token-is? token-seq :rparen)
     ; no argument expressions, so just apply epsilon production
     (p/do-production :opt_argument_expression_list [] token-seq ctx)
@@ -140,7 +140,7 @@
     (p/do-production :opt_argument_expression_list [parse-argument-expression-list] token-seq ctx)))
 
 
-(defn parse-postfix-suffix [token-seq & [ctx]]
+(defn parse-postfix-suffix [token-seq ctx]
   (cond
     ; Array subscript
     (l/next-token-is? token-seq :lbracket)
@@ -172,7 +172,7 @@
     :else (exc/throw-exception "Invalid postfix suffix")))
 
 
-(defn parse-postfix-suffix-list [token-seq & [ctx]]
+(defn parse-postfix-suffix-list [token-seq ctx]
   (let [pr (p/do-production :postfix_suffix_list [parse-postfix-suffix] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-in? remaining postfix-suffix-start-tokens)
@@ -182,7 +182,7 @@
       pr)))
 
 
-(defn parse-postfix-expression [token-seq & [ctx]]
+(defn parse-postfix-expression [token-seq ctx]
   (let [pr (p/do-production :postfix_expression [parse-primary] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-in? token-seq postfix-suffix-start-tokens)
@@ -193,7 +193,7 @@
 
 
 ;; TODO: should handle sizeof
-(defn parse-unary-expression [token-seq & [ctx]]
+(defn parse-unary-expression [token-seq ctx]
   (cond
     (l/next-token-in? token-seq unary-operators)
     (p/do-production :unary_expression [(p/expect (l/next-token-type token-seq))
@@ -209,12 +209,12 @@
 
 ;; FIXME: this is just a placeholder fo now: it just parses a sequence of
 ;; type specifiers and type qualifiers
-(defn parse-type-name [token-seq & [ctx]]
+(defn parse-type-name [token-seq ctx]
   (p/accept-matching :type_name (l/make-token-type-pred type-specifiers-and-qualifiers) token-seq))
 
 
 ;; TODO: just a place holder for now (allowing only integer literals)
-(defn parse-cast-expression [token-seq & [ctx]]
+(defn parse-cast-expression [token-seq ctx]
   (if (l/next-token-is? token-seq :lparen)
     (p/do-production :cast_expression [(p/expect :lparen)
                                        parse-type-name
@@ -227,7 +227,7 @@
   (p/make-operators binop-precedence binop-associativity parse-cast-expression))
 
 
-(defn parse-logical-or-expression [token-seq & [ctx]]
+(defn parse-logical-or-expression [token-seq ctx]
   (let [ctx2 (assoc ctx :operators c-infix-operators)]
     (let [pr (p/parse-infix-expression token-seq ctx2)]
       (do
@@ -240,7 +240,7 @@
 (declare parse-expression)
 
 
-(defn parse-conditional-expression [token-seq & [ctx]]
+(defn parse-conditional-expression [token-seq ctx]
   ; State is:
   ;   conditional-expression -> ^ logical-or-expression
   ;   conditional-expression -> ^ logical-or-expression '?' expression : conditional-expression
@@ -259,7 +259,7 @@
       pr)))
 
 
-(defn parse-assignment-expression [token-seq & [ctx]]
+(defn parse-assignment-expression [token-seq ctx]
   ; State is:
   ;    assignment-expression -> ^ conditional-expression
   ;    assignment-expression -> ^ conditional-expression assignment-operator assignment-expression
@@ -281,7 +281,7 @@
         pr))))
 
 
-(defn parse-expression [token-seq & [ctx]]
+(defn parse-expression [token-seq ctx]
   ; State is:
   ;   expression -> ^ assignment-expression
   ;   expression -> ^ assignment-expression ',' expression
@@ -297,41 +297,41 @@
       )))
 
 
-(defn parse-type-qualifier-list [token-seq & [ctx]]
+(defn parse-type-qualifier-list [token-seq ctx]
   (p/accept-matching :type_qualifier_list
                      (l/make-token-type-pred type-qualifiers)
                      token-seq))
 
 
-(defn parse-pointer [token-seq & [ctx]]
+(defn parse-pointer [token-seq ctx]
   ; pointer -> ^ '*' type-qualifier-list
   ; pointer -> ^ '*' type-qualifier-list pointer
-  (let [pr (p/do-production :pointer [(p/expect :op_star) parse-type-qualifier-list] token-seq)
+  (let [pr (p/do-production :pointer [(p/expect :op_star) parse-type-qualifier-list] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :op_star)
       ; continue recursively
-      (p/continue-production pr [parse-pointer])
+      (p/continue-production pr [parse-pointer] ctx)
       ; done
       pr)))
 
 
-(defn parse-opt-pointer [token-seq & [ctx]]
+(defn parse-opt-pointer [token-seq ctx]
   (if (l/next-token-is? token-seq :op_star)
-    (p/do-production :opt_pointer [parse-pointer] token-seq)
-    (p/do-production :opt_pointer [] token-seq)))
+    (p/do-production :opt_pointer [parse-pointer] token-seq ctx)
+    (p/do-production :opt_pointer [] token-seq ctx)))
 
 
 (declare parse-declarator)
 
 
-(defn parse-direct-declarator-base [token-seq & [ctx]]
+(defn parse-direct-declarator-base [token-seq ctx]
   ; direct-declarator-base -> identifier
   ; direct-declarator-base -> '(' declarator ')'
   (if (l/next-token-is? token-seq :identifier)
-    (p/do-production :direct_declarator_base [(p/expect :identifier)] token-seq)
+    (p/do-production :direct_declarator_base [(p/expect :identifier)] token-seq ctx)
     (p/do-production :direct_declarator_base [(p/expect :lparen)
                                               parse-declarator
-                                              (p/expect :rparen)] token-seq)))
+                                              (p/expect :rparen)] token-seq ctx)))
 
 
 ;; FIXME: productions should be (from ANTLR 3 grammar)
@@ -344,39 +344,39 @@
 ;; 	;
 ;; This looks doable with 2 tokens of lookahead.
 ;; 
-(defn parse-declarator-suffix [token-seq & [ctx]]
+(defn parse-declarator-suffix [token-seq ctx]
   (if (l/next-token-is? token-seq :lparen)
-    (p/do-production :declarator_suffix [(p/expect :lparen) (p/expect :rparen)] token-seq)
-    (p/do-production :declarator_suffix [(p/expect :lbracket) (p/expect :rbracket)] token-seq)))
+    (p/do-production :declarator_suffix [(p/expect :lparen) (p/expect :rparen)] token-seq ctx)
+    (p/do-production :declarator_suffix [(p/expect :lbracket) (p/expect :rbracket)] token-seq ctx)))
 
 
-(defn parse-declarator-suffix-list [token-seq & [ctx]]
+(defn parse-declarator-suffix-list [token-seq ctx]
   ; Start by parsing one declarator suffix.
-  (let [pr (p/do-production :declarator_suffix_list [parse-declarator-suffix] token-seq)
+  (let [pr (p/do-production :declarator_suffix_list [parse-declarator-suffix] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-in? remaining declarator-suffix-start-tokens)
       ; Continue recursively.
-      (p/continue-production pr [parse-declarator-suffix-list])
+      (p/continue-production pr [parse-declarator-suffix-list] ctx)
       ; Done.
       pr)))
 
 
-(defn parse-opt-declarator-suffix-list [token-seq & [ctx]]
+(defn parse-opt-declarator-suffix-list [token-seq ctx]
   (if (l/next-token-in? token-seq declarator-suffix-start-tokens)
-    (p/do-production :opt_declarator_suffix_list [parse-declarator-suffix-list] token-seq)
-    (p/do-production :opt_declarator_suffix_list [] token-seq)))
+    (p/do-production :opt_declarator_suffix_list [parse-declarator-suffix-list] token-seq ctx)
+    (p/do-production :opt_declarator_suffix_list [] token-seq ctx)))
 
 
-(defn parse-direct-declarator [token-seq & [ctx]]
+(defn parse-direct-declarator [token-seq ctx]
   (p/do-production :direct_declarator [parse-direct-declarator-base
-                                     parse-opt-declarator-suffix-list] token-seq))
+                                     parse-opt-declarator-suffix-list] token-seq ctx))
 
 
-(defn parse-declarator [token-seq & [ctx]]
-  (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq))
+(defn parse-declarator [token-seq ctx]
+  (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq ctx))
 
 
-(defn parse-initializer [token-seq & [ctx]]
+(defn parse-initializer [token-seq ctx]
   (p/do-production :initializer [parse-assignment-expression] token-seq ctx))
 
 
@@ -385,27 +385,27 @@
 (declare parse-compound-statement)
 
 
-(defn parse-while-statement [token-seq & [ctx]]
+(defn parse-while-statement [token-seq ctx]
   (p/do-production :while_statement [(p/expect :kw_while)
                                      (p/expect :lparen) parse-expression (p/expect :rparen)
                                      parse-statement] token-seq ctx))
 
 
-(defn parse-if-statement [token-seq & [ctx]]
+(defn parse-if-statement [token-seq ctx]
   (p/do-production :if_statement [(p/expect :kw_if)
                                   (p/expect :lparen) parse-expression (p/expect :rparen)
                                   parse-statement] token-seq ctx))
 
 
-(defn parse-labeled-statement [token-seq & [ctx]]
+(defn parse-labeled-statement [token-seq ctx]
   (p/do-production :labeled_statement [(p/expect :identifier) (p/expect :colon) parse-statement] token-seq ctx))
 
 
-(defn parse-case-statement [token-seq & [ctx]]
+(defn parse-case-statement [token-seq ctx]
   (p/do-production :case_statement [(p/expect :kw_case) parse-expression (p/expect :colon) parse-statement] token-seq ctx))
 
 
-(defn parse-statement [token-seq & [ctx]]
+(defn parse-statement [token-seq ctx]
   (cond
     (l/next-token-is? token-seq :lbrace) (p/do-production :statement [parse-compound-statement] token-seq ctx)
     (l/next-token-is? token-seq :kw_while) (p/do-production :statement [parse-while-statement] token-seq ctx)
@@ -421,23 +421,23 @@
 ;; Another interesting point in the parser: distinguishing statements
 ;; from declarations (since we want to support the C99 feature
 ;; of allowing declarations and statements to appear in any order.)
-(defn parse-block-item [token-seq & [ctx]]
+(defn parse-block-item [token-seq ctx]
   (if (l/next-token-in? token-seq declaration-start-tokens)
     (p/do-production :block_item [parse-declaration] token-seq ctx)
     (p/do-production :block_item [parse-statement] token-seq ctx)))
 
 
-(defn parse-block-item-list [token-seq & [ctx]]
+(defn parse-block-item-list [token-seq ctx]
   (let [pr (p/do-production :block_item_list [parse-block-item] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :rbrace)
       ; end of block item list
       pr
       ; there is at least one more block item
-      (p/continue-production pr [parse-block-item-list] token-seq ctx))))
+      (p/continue-production pr [parse-block-item-list] ctx))))
 
 
-(defn parse-opt-block-item-list [token-seq & [ctx]]
+(defn parse-opt-block-item-list [token-seq ctx]
   (if (l/next-token-is? token-seq :rbrace)
     ; empty block
     (p/do-production :opt_block_item_list [] token-seq ctx)
@@ -447,7 +447,7 @@
 
 
 ;; TODO: this is just a placeholder for now
-(defn parse-compound-statement [token-seq & [ctx]]
+(defn parse-compound-statement [token-seq ctx]
   (p/do-production :compound_statement [(p/expect :lbrace)
                                         parse-opt-block-item-list
                                         (p/expect :rbrace)] token-seq ctx))
@@ -467,8 +467,8 @@
 ;; will need to check to see if a function definition was produced,
 ;; in which case it should not require a terminating ';' token.
 ;;
-(defn parse-init-declarator [token-seq & [ctx]]
-  (let [pr (p/do-production :init_declarator [parse-declarator] token-seq)
+(defn parse-init-declarator [token-seq ctx]
+  (let [pr (p/do-production :init_declarator [parse-declarator] token-seq ctx)
         remaining (:tokens pr)]
     (cond
      ; If the next token is the assignment operator,
@@ -488,13 +488,13 @@
      :else pr)))
 
 
-(defn parse-declaration-specifiers [token-seq & [ctx]]
+(defn parse-declaration-specifiers [token-seq ctx]
   (p/accept-matching :declaration_specifiers
                      (l/make-token-type-pred declaration-specifiers)
                      token-seq))
 
 
-(defn parse-init-declarator-list [token-seq & [ctx]]
+(defn parse-init-declarator-list [token-seq ctx]
   ; Initial state:
   ;   init-declarator-list -> ^ init-declarator
   ;   init-declarator-list -> ^ init-declarator ',' init-declarator-list
@@ -519,7 +519,7 @@
        :else pr))))
 
 
-(defn parse-opt-init-declarator-list [token-seq & [ctx]]
+(defn parse-opt-init-declarator-list [token-seq ctx]
   ; do we see a declarator?
   (if (l/next-token-in? token-seq declarator-start-tokens)
     ; there is at least one declarator
@@ -533,7 +533,7 @@
   (= (:symbol node) :function_definition))
 
 
-(defn parse-declaration [token-seq & [ctx]]
+(defn parse-declaration [token-seq ctx]
   ; Parse just the declaration specifiers and (optional) init declarator list.
   ; We will need to know whether a function definition was parsed.
   (let [pr (p/do-production :declaration [parse-declaration-specifiers
@@ -549,10 +549,10 @@
       ; One or more non-function-definition init declarators
       ; were parsed.  Require a semicolon to terminate the
       ; overall declaration.
-      (p/continue-production pr [(p/expect :semicolon)]))))
+      (p/continue-production pr [(p/expect :semicolon)] ctx))))
 
 
-(defn parse-declaration-list [token-seq & [ctx]]
+(defn parse-declaration-list [token-seq ctx]
   ; Initial state is:
   ;   declaration-list -> ^ declaration
   ;   declaration-list -> ^ declaration declaration-list
