@@ -76,4 +76,6 @@
 (deftest string-literal-test
   (testing "string literals"
     (is (verify-string-literal "\"\""))
+    (is (verify-string-literal "\"Hello, world\""))
+    (is (verify-string-literal "\"Foo\\tbar\\n\""))
     ))
