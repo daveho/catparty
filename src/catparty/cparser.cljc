@@ -406,7 +406,7 @@
 
 
 (defn parse-default-statement [token-seq ctx]
-  (p/do-production :default_statement [(p/expect :kw_default) (p/expect :colon)] token-seq ctx))
+  (p/do-production :default_statement [(p/expect :kw_default) (p/expect :colon) parse-statement] token-seq ctx))
 
 
 (defn parse-statement [token-seq ctx]
