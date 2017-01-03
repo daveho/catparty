@@ -52,7 +52,7 @@ Supported features in the C parser are approximately:
 
 ## License
 
-The code is distributed under the [GPL version 3](https://www.gnu.org/licenses/gpl-3.0.en.html).
+The code is distributed under the [GPL version 3](https://www.gnu.org/licenses/gpl-3.0.en.html).  See [LICENSE.txt](LICENSE.txt).
 
 ## Contact
 
