@@ -377,8 +377,13 @@
   (cond
     (and (:allow_concrete ctx) (l/next-token-is? token-seq :identifier))
     (p/do-production :direct_declarator_base [(p/expect :identifier)] token-seq ctx)
-    
-    (and (:allow_abstract ctx) (l/next-tokens-match? token-seq [is-lparen? is-declaration-start?]))
+
+    ; See if we can accept an abstract declarator and if
+    ; we're looking ahead to a function suffix. If so, we can
+    ; apply the epsilon production.
+    (and (:allow_abstract ctx)
+         (or (l/next-tokens-are? token-seq [:lparen :rparen])
+             (l/next-tokens-match? token-seq [is-lparen? is-declaration-start?])))
     (p/do-production :direct_declarator_base [] token-seq ctx)
     
     ; At this point, a left parenthesis can only indicate grouping
