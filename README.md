@@ -21,8 +21,8 @@ To run the ClojureScript version, run the command
 Then, navigate your web browser to `localhost:9000`.  Then, run the following commands in the REPL:
 
 ```clojure
-(require [catparty.cparser :as cp])
-(require [catparty.prettyprint :as pp])
+(require '[catparty.cparser :as cp])
+(require '[catparty.prettyprint :as pp])
 (pp/pretty-print cp/t)
 ```
 
@@ -31,8 +31,9 @@ This prints the parse tree of the test code at the bottom of `cparser.cljc`.
 You can run the same code in a Clojure REPL by running `lein repl`, and then
 
 ```clojure
-(use 'catparty.cparser)
-(pp/pretty-print t)
+(require '[catparty.cparser :as cp])
+(require '[catparty.prettyprint :as pp])
+(pp/pretty-print cp/t)
 ```
 
 ## What works

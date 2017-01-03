@@ -411,6 +411,9 @@
   ))
 
 
+(declare parse-declaration-specifiers)
+
+
 ;; Parameter declarations!
 ;;
 ;; The K&R 2nd ed. grammar specifies these as:
