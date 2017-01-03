@@ -81,8 +81,7 @@
    [#"^/" :op_div]
    [#"^%=" :op_mod_assign]
    [#"^%" :op_mod]
-   [#"^\.\.\." :op_ellipsis]
-   [#"^\." :op_dot]])
+   [#"^\.\.\." :op_ellipsis]])
 
 (def c-punct-patterns
   [[#"^\(" :lparen]
@@ -95,6 +94,8 @@
    [#"^;" :semicolon]
    [#"^," :comma]
    [#"^\?" :ques]
+   [#"^\.\.\." :ellipsis]
+   [#"^\." :dot]
    ])
 
 (def c-literal-patterns
@@ -110,7 +111,7 @@
 (def c-all-patterns
   (concat c-keyword-patterns
           c-identifier-pattern
-          c-literal-patterns  ; must be before operators (otherwise, e.g., ".3" is scanned incorrectly)
+          c-literal-patterns  ; must be before punctuation (otherwise, e.g., ".3" is scanned incorrectly)
           c-operator-patterns
           c-punct-patterns))
 

@@ -60,7 +60,7 @@
 
 ;; Tokens that can start a postfix suffix
 (def postfix-suffix-start-tokens
-  (set/union #{:lbracket :lparen :op_dot :op_arrow} inc-dec-operators))
+  (set/union #{:lbracket :lparen :dot :op_arrow} inc-dec-operators))
 
 ;; Tokens that can start a declaration.
 ;; FIXME: need to handle typedef names.
@@ -169,8 +169,8 @@
                                      (p/expect :rparen)] token-seq ctx)
     
     ; Member access
-    (l/next-token-is? token-seq :op_dot)
-    (p/do-production :member_access [(p/expect :op_dot) (p/expect :identifier)] token-seq ctx)
+    (l/next-token-is? token-seq :dot)
+    (p/do-production :member_access [(p/expect :dot) (p/expect :identifier)] token-seq ctx)
     
     ; Indirect member access
     (l/next-token-is? token-seq :op_arrow)
@@ -273,6 +273,10 @@
                                parse-conditional-expression] ctx)
       ; Production ends here
       pr)))
+
+
+(defn parse-constant-expression [token-seq ctx]
+  (p/do-production :constant_expression [parse-conditional-expression] token-seq ctx))
 
 
 (defn parse-assignment-expression [token-seq ctx]
@@ -401,20 +405,77 @@
   ))
 
 
+;; Parameter declarations!
+;;
+;; The K&R 2nd ed. grammar specifies these as:
+;;   parameter-declaration -> ^ declaration-specifiers
+;;   parameter-declaration -> ^ declaration-specifiers declarator
+;;   parameter-declaration -> ^ declaration-specifiers abstract-declarator
+;;
+;; The ambiguity between the latter two productions would require
+;; arbitrary lookahead to resolve.  Our solution is to use a single
+;; parse function to parse both concrete and abstract declarators
+;; and use the parser context to indicate which are allowed.
+;;
+(defn parse-parameter-declaration [token-seq ctx]
+  (p/do-production :parameter_declaration
+                   [parse-declaration-specifiers parse-declarator]
+                   token-seq
+                   (assoc ctx :allow_concrete true :allow_abstract true)))
+
+
+(defn parse-parameter-list [token-seq ctx]
+  ; Start by parsing one parameter declaration
+  (let [pr (p/do-production :parameter_list [parse-parameter-declaration] token-seq ctx)
+        remaining (:tokens pr)]
+    ; See whether the parameter list continues
+    (cond
+      ; ',' '...' indicating varargs is parsed by parse-parameter-type-list,
+      ; so stop here if we see them
+      (l/next-tokens-are? remaining [:comma :ellipsis])
+      pr
+      
+      ; Continue recursively?
+      (l/next-token-is? remaining :comma)
+      (p/continue-production pr [(p/expect :comma) parse-parameter-list] ctx)
+      
+      ; Stop here
+      :else pr)))
+
+
+(defn parse-parameter-type-list [token-seq ctx]
+  (let [pr (p/do-production :parameter_type_list [parse-parameter-list] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-is? remaining :comma)
+      (p/continue-production pr [(p/expect :comma) (p/expect :ellipsis)] ctx)
+      pr)))
+
+
 ;; FIXME: productions should be (from ANTLR 3 grammar)
 ;; declarator_suffix
 ;;     :   '[' constant_expression ']'
 ;;     |   '[' ']'
 ;;     |   '(' parameter_type_list ')'
-;;     |   '(' identifier_list ')'          -- old style C, won't support this for now
-;;     |   '(' ')'
+;;     |   '(' identifier_list ')'          -- old style C, won't support this for now?
+;;     |   '(' ')'                          -- old style C, won't support this for now?
 ;; 	;
 ;; This looks doable with 2 tokens of lookahead.
 ;; 
 (defn parse-declarator-suffix [token-seq ctx]
-  (if (l/next-token-is? token-seq :lparen)
-    (p/do-production :declarator_suffix [(p/expect :lparen) (p/expect :rparen)] token-seq ctx)
-    (p/do-production :declarator_suffix [(p/expect :lbracket) (p/expect :rbracket)] token-seq ctx)))
+  (cond
+    (l/next-tokens-are? token-seq [:lbracket :rbracket])
+    (p/do-production :declarator_suffix [(p/expect :lbracket) (p/expect :rbracket)] token-seq ctx)
+    
+    (l/next-token-is? token-seq :lbracket)
+    (p/do-production :declarator_suffix [(p/expect :lbracket)
+                                         parse-constant-expression
+                                         (p/expect :rbracket)] token-seq ctx)
+    
+    :else
+    (p/do-production :declarator_suffix [(p/expect :lparen)
+                                         parse-parameter-type-list
+                                         (p/expect :rparen)] token-seq ctx)
+    ))
 
 
 (defn parse-declarator-suffix-list [token-seq ctx]
@@ -699,7 +760,7 @@
 
 (def testprog
 "
-int f()
+int f(int, double x)
 {
     int q;
     h;
