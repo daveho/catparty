@@ -13,6 +13,10 @@
 ;; Adapted from the v3 and v4 ANTLR C grammars:
 ;;    http://www.antlr3.org/grammar/1153358328744/C.g
 ;;    https://github.com/antlr/grammars-v4/blob/master/c/C.g4
+;; Also useful, ISO C grammar with opt factored out (very helpful
+;; for figuring out how to handle abstract vs. concrete
+;; declarators):
+;;    http://www.cs.dartmouth.edu/~mckeeman/cs48/references/c.html
 
 
 (def storage-class-specifiers
@@ -101,6 +105,9 @@
 
 
 (def is-literal? (l/make-token-type-pred literals))
+
+;; FIXME: this needs to handle typedef names
+(def is-declaration-start? (l/make-token-type-pred declaration-start-tokens))
 
 
 (defn parse-literal [token-seq ctx]
@@ -331,16 +338,62 @@
 
 
 (declare parse-declarator)
+(def is-lparen? #(= (l/get-token-type %) :lparen))
 
 
+;; Note that this parses both abstract and concrete direct declarator bases.
+;; In the context:
+;;   - :allow_abstract indicates an abstract direct declarator base is allowed
+;;   - :allow_concrete indicates a concrete direct declarator base is allowed
+;;
+;; The tricky part is to distinguish when to apply the epsilon production
+;; (allowed for abstract declarators only), which is essentially equivalent to
+;; the identifier in a concrete declarator.  The problem is that if we see
+;; a left paren, it could be parentheses used for grouping, or it could be a
+;; declarator suffix indicating a function.  Our strategy is that if we look
+;; ahead and see either:
+;;
+;;    - '(' ')', or
+;;    - '(' <token indicating the start of a type>
+;;
+;; then the left paren indicates the start of a declarator suffix, and we
+;; should apply the epsilon production.
+;;
+;; Also, the epsilon production can be applied for an abstract declarator
+;; if the :has_pointer property is set in the context, and no other
+;; production makes sense.  This is for abstract declarators such as
+;;
+;;     *
+;;
+;; which might appear in a type name such as
+;;
+;;     int *
+;;
 (defn parse-direct-declarator-base [token-seq ctx]
-  ; direct-declarator-base -> identifier
-  ; direct-declarator-base -> '(' declarator ')'
-  (if (l/next-token-is? token-seq :identifier)
+  ; State is:
+  ;   direct-declarator-base -> ^ identifier           -- concrete only
+  ;   direct-declarator-base -> ^ '(' declarator ')'   -- either concrete or abstract
+  ;   direct-declarator-base -> ^ epsilon              -- abstract only
+  (cond
+    (and (:allow_concrete ctx) (l/next-token-is? token-seq :identifier))
     (p/do-production :direct_declarator_base [(p/expect :identifier)] token-seq ctx)
-    (p/do-production :direct_declarator_base [(p/expect :lparen)
-                                              parse-declarator
-                                              (p/expect :rparen)] token-seq ctx)))
+    
+    (and (:allow_abstract ctx) (l/next-tokens-match? token-seq [is-lparen? is-declaration-start?]))
+    (p/do-production :direct_declarator_base [] token-seq ctx)
+    
+    ; At this point, a left parenthesis can only indicate grouping
+    (l/next-token-is? token-seq :lparen)
+    (p/do-production :direct_declarator_base [parse-declarator] token-seq ctx)
+    
+    ; At this point, we don't have a viable concrete direct declarator base,
+    ; but we can still get a viable abstract one as long as there was
+    ; a pointer.
+    (and (:allow_abstract ctx) (:has_pointer ctx))
+    (p/do-production :direct_declarator_base [] token-seq ctx)
+    
+    :else
+    (exc/throw-exception "No viable declarator base") ; FIXME: need better error message
+  ))
 
 
 ;; FIXME: productions should be (from ANTLR 3 grammar)
@@ -348,7 +401,7 @@
 ;;     :   '[' constant_expression ']'
 ;;     |   '[' ']'
 ;;     |   '(' parameter_type_list ')'
-;;     |   '(' identifier_list ')'
+;;     |   '(' identifier_list ')'          -- old style C, won't support this for now
 ;;     |   '(' ')'
 ;; 	;
 ;; This looks doable with 2 tokens of lookahead.
@@ -376,13 +429,30 @@
     (p/do-production :opt_declarator_suffix_list [] token-seq ctx)))
 
 
+;; Note that this parses both abstract and concrete direct declarators.
+;; In the context:
+;;   - :allow_abstract indicates an abstract direct declarator is allowed
+;;   - :allow_concrete indicates a concrete direct declarator is allowed
+;;
 (defn parse-direct-declarator [token-seq ctx]
   (p/do-production :direct_declarator [parse-direct-declarator-base
-                                     parse-opt-declarator-suffix-list] token-seq ctx))
+                                       parse-opt-declarator-suffix-list] token-seq ctx))
 
 
+;; Note that this parses both abstract and concrete declarators.
+;; In the context:
+;;   - :allow_abstract indicates an abstract declarator is allowed
+;;   - :allow_concrete indicates a concrete declarator is allowed
+;; Note that we need to check whether a pointer was parsed, since this
+;; affects which kinds of direct abstract declarator bases are allowed.
+;;
 (defn parse-declarator [token-seq ctx]
-  (p/do-production :declarator [parse-opt-pointer parse-direct-declarator] token-seq ctx))
+  ; Start by parsing an optional pointer.
+  (let [pr (p/do-production :declarator [parse-opt-pointer] token-seq ctx)
+        remaining (:tokens pr)
+        ctx2 (assoc ctx :has_pointer (node/has-children? (:node pr)))]
+    ; Now parse a direct declarator
+    (p/continue-production pr [parse-direct-declarator] ctx2)))
 
 
 (defn parse-initializer [token-seq ctx]
@@ -468,7 +538,7 @@
 ;; from declarations (since we want to support the C99 feature
 ;; of allowing declarations and statements to appear in any order.)
 (defn parse-block-item [token-seq ctx]
-  (if (l/next-token-in? token-seq declaration-start-tokens)
+  (if (l/next-token-matches? token-seq is-declaration-start?)
     (p/do-production :block_item [parse-declaration] token-seq ctx)
     (p/do-production :block_item [parse-statement] token-seq ctx)))
 
@@ -516,7 +586,8 @@
 ;; in which case it should not require a terminating ';' token.
 ;;
 (defn parse-init-declarator [token-seq ctx]
-  (let [pr (p/do-production :init_declarator [parse-declarator] token-seq ctx)
+  ;; An init declarator must be concrete (not abstract)
+  (let [pr (p/do-production :init_declarator [parse-declarator] token-seq (assoc ctx :allow_concrete true))
         remaining (:tokens pr)]
     (cond
      ; If the next token is the assignment operator,

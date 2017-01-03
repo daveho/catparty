@@ -238,3 +238,24 @@
       (empty? remaining) false
       (not (= (get-token-type (first remaining)) (first syms))) false
       :else (recur (rest syms) (rest remaining)))))
+
+;; Check whether the next tokens match the specified sequence
+;; of predicates.
+;;
+;; Parameters:
+;;   token-seq  - the input token sequence
+;;   preds - sequence of predicate functions
+;;
+;; Returns:
+;;   true if there are at least as many tokens as predicates, and
+;;   if each predicate returns true for its corresponding token,
+;;   false otherwise
+;;
+(defn next-tokens-match? [token-seq preds]
+  (loop [ps preds
+         remaining token-seq]
+    (cond
+      (empty? ps) true
+      (empty? remaining) false
+      (not ((first ps) (first remaining))) false
+      :else (recur (rest ps) (rest remaining)))))

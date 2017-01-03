@@ -108,6 +108,19 @@
     0
     (count (:value node))))
 
+
+;; Check whether specified node has any children.
+;;
+;; Parameters:
+;;   node - a node
+;;
+;; Returns:
+;;   true if the node has at least one child, false otherwise
+;;
+(defn has-children? [node]
+  (> (num-children node) 0))
+
+
 ; Get the specified child of given node.
 ;
 ; Parameters:
