@@ -426,11 +426,21 @@
 ;; parse function to parse both concrete and abstract declarators
 ;; and use the parser context to indicate which are allowed.
 ;;
+;; Determining when to apply the first production is also somewhat
+;; interesting: we parse the declaration specifiers, and after that
+;; if the next token is ',' or ')', then there is no declarator
+;; (concrete or abstract.)
+;;
 (defn parse-parameter-declaration [token-seq ctx]
-  (p/do-production :parameter_declaration
-                   [parse-declaration-specifiers parse-declarator]
-                   token-seq
-                   (assoc ctx :allow_concrete true :allow_abstract true)))
+  (let [pr (p/do-production :parameter_declaration [parse-declaration-specifiers] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-in? remaining #{:comma :lparen})
+      ; no declarator (concrete or abstract)
+      pr
+      ; there is a declarator
+      (p/continue-production pr
+                             [parse-declarator]
+                             (assoc ctx :allow_concrete true :allow_abstract true)))))
 
 
 (defn parse-parameter-list [token-seq ctx]
@@ -514,6 +524,10 @@
                                        parse-opt-declarator-suffix-list] token-seq ctx))
 
 
+;; Determine if an :opt_pointer node represents an actual pointer.
+(defn has-pointer? [node]
+  (node/has-children? node))
+
 ;; Note that this parses both abstract and concrete declarators.
 ;; In the context:
 ;;   - :allow_abstract indicates an abstract declarator is allowed
@@ -525,7 +539,10 @@
   ; Start by parsing an optional pointer.
   (let [pr (p/do-production :declarator [parse-opt-pointer] token-seq ctx)
         remaining (:tokens pr)
-        ctx2 (assoc ctx :has_pointer (node/has-children? (:node pr)))]
+        ; the first child of the :declarator node is the :opt_pointer node
+        opt-ptr-node (node/get-child (:node pr) 0)
+        ; note whether the :opt_pointer node has an actual pointer
+        ctx2 (assoc ctx :has_pointer (has-pointer? opt-ptr-node))]
     ; Now parse a direct declarator
     (p/continue-production pr [parse-direct-declarator] ctx2)))
 
