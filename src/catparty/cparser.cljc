@@ -25,6 +25,10 @@
 ;;    http://www.cs.dartmouth.edu/~mckeeman/cs48/references/c.html
 
 
+;; ----------------------------------------------------------------------
+;; Data
+;; ----------------------------------------------------------------------
+
 (def storage-class-specifier-tokens
   #{:kw_typedef :kw_extern :kw_static :kw_auto :kw_register})
 
@@ -126,6 +130,28 @@
   (into {} (map (fn [k] [k :left]) (keys binop-precedence))))
 
 
+;; ----------------------------------------------------------------------
+;; Forward declarations
+;; ----------------------------------------------------------------------
+
+(declare parse-cast-expression)
+(declare parse-expression)
+(declare parse-assignment-expression)
+(declare parse-specifier-qualifier-list)
+(declare parse-declarator)
+(declare update-declarator-context)
+(declare parse-type-specifier)
+(declare parse-type-qualifier)
+(declare parse-declaration-specifiers)
+(declare parse-declaration)
+(declare parse-statement)
+(declare parse-compound-statement)
+
+
+;; ----------------------------------------------------------------------
+;; Functions
+;; ----------------------------------------------------------------------
+
 (defn format-err [msg token-seq]
   (let [where (if (empty? token-seq)
                 "<EOF>"
@@ -149,11 +175,6 @@
       (if (not (l/next-token-matches? token-seq is-literal?))
         (exc/throw-exception (format-err (str "Expected literal, saw " tt) token-seq))
         (p/do-production :literal [(p/expect tt)] token-seq ctx)))))
-
-
-(declare parse-cast-expression)
-(declare parse-expression)
-(declare parse-assignment-expression)
 
 
 ;; FIXME: just a placeholder for now, only allows literals
@@ -254,11 +275,6 @@
     (p/do-production :unary_expression [parse-postfix-expression] token-seq ctx)))
 
 
-(declare parse-specifier-qualifier-list)
-(declare parse-declarator)
-(declare update-declarator-context)
-
-
 (defn parse-type-name [token-seq ctx]
   ; Current state is:
   ;    type-name -> ^ specifier-qualifier-list
@@ -292,9 +308,6 @@
 
 (defn parse-logical-or-expression [token-seq ctx]
   (p/parse-infix-expression token-seq (assoc ctx :operators c-infix-operators)))
-
-
-(declare parse-expression)
 
 
 (defn parse-conditional-expression [token-seq ctx]
@@ -358,11 +371,6 @@
       )))
 
 
-(declare parse-declarator)
-(declare parse-type-specifier)
-(declare parse-type-qualifier)
-
-
 ;; FIXME: does not handle
 ;;   - typedef name
 ;;   - enum specifier
@@ -384,7 +392,7 @@
       pr)))
 
 ;; Update parsing context to allow concrete and/or abstract
-;; declarators.  Ensures that neither :allow_concrete or :allow_abstract
+;; declarators.  Ensures that neither :allow_concrete nor :allow_abstract
 ;; properties are left set unintentionally.
 ;;
 ;; Parameters:
@@ -535,7 +543,6 @@
     (p/do-production :opt_pointer [] token-seq ctx)))
 
 
-(declare parse-declarator)
 (def is-lparen? #(= (l/get-token-type %) :lparen))
 
 
@@ -599,9 +606,6 @@
     :else
     ; FIXME: need better error message
     (exc/throw-exception (format-err "No viable declarator base" token-seq))))
-
-
-(declare parse-declaration-specifiers)
 
 
 ;; Parameter declarations!
@@ -739,11 +743,6 @@
 
 (defn parse-initializer [token-seq ctx]
   (p/do-production :initializer [parse-assignment-expression] token-seq ctx))
-
-
-(declare parse-declaration)
-(declare parse-statement)
-(declare parse-compound-statement)
 
 
 (defn parse-while-statement [token-seq ctx]
@@ -1005,7 +1004,9 @@
   (:node (parse-declaration-list token-seq {:allow_func true})))
 
 
+;; ----------------------------------------------------------------------
 ;; Just for testing...
+;; ----------------------------------------------------------------------
 
 ; int x, y;
 (def testprog
