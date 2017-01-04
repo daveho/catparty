@@ -196,7 +196,7 @@
       ; reached end, we're done
       pr
       ; there is at least one more argument expression
-      (p/continue-production pr [(p/expect :comma) parse-argument-expression-list] token-seq ctx))))
+      (p/continue-production pr [(p/expect :comma) parse-argument-expression-list] token-seq ctx :flatten))))
 
 
 (defn parse-opt-argument-expression-list [token-seq ctx]
@@ -244,7 +244,7 @@
         remaining (:tokens pr)]
     (if (l/next-token-in? remaining postfix-suffix-start-tokens)
       ; continue recursively
-      (p/continue-production pr [parse-postfix-suffix-list] ctx)
+      (p/continue-production pr [parse-postfix-suffix-list] ctx :flatten)
       ; done
       pr)))
 
@@ -362,7 +362,7 @@
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :comma)
       ; Production continues recursively
-      (p/continue-production pr [(p/expect :comma) parse-expression] ctx)
+      (p/continue-production pr [(p/expect :comma) parse-expression] ctx :flatten)
       ; Production ends here
       (do
         ;(println "Tokens after parsing expression: " (:tokens pr))
@@ -386,7 +386,7 @@
         remaining (:tokens pr)]
     (if (l/next-token-in? remaining type-specifier-or-qualifier-start-tokens)
       ; continue recursively
-      (p/continue-production pr [parse-specifier-qualifier-list] ctx)
+      (p/continue-production pr [parse-specifier-qualifier-list] ctx :flatten)
       ; we're done
       pr)))
 
@@ -436,7 +436,7 @@
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :comma)
       ; Continue recursively
-      (p/continue-production pr [(p/expect :comma) parse-struct-declarator-list] ctx)
+      (p/continue-production pr [(p/expect :comma) parse-struct-declarator-list] ctx :flatten)
       ; No more declarators, so we're done
       pr)))
 
@@ -649,7 +649,7 @@
       
       ; Continue recursively?
       (l/next-token-is? remaining :comma)
-      (p/continue-production pr [(p/expect :comma) parse-parameter-list] ctx)
+      (p/continue-production pr [(p/expect :comma) parse-parameter-list] ctx :flatten)
       
       ; Stop here
       :else pr)))
@@ -659,7 +659,7 @@
   (let [pr (p/do-production :parameter_type_list [parse-parameter-list] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :comma)
-      (p/continue-production pr [(p/expect :comma) (p/expect :ellipsis)] ctx)
+      (p/continue-production pr [(p/expect :comma) (p/expect :ellipsis)] ctx :flatten)
       pr)))
 
 
@@ -696,7 +696,7 @@
         remaining (:tokens pr)]
     (if (l/next-token-in? remaining declarator-suffix-start-tokens)
       ; Continue recursively.
-      (p/continue-production pr [parse-declarator-suffix-list] ctx)
+      (p/continue-production pr [parse-declarator-suffix-list] ctx :flatten)
       ; Done.
       pr)))
 
@@ -830,7 +830,7 @@
       ; end of block item list
       pr
       ; there is at least one more block item
-      (p/continue-production pr [parse-block-item-list] ctx))))
+      (p/continue-production pr [parse-block-item-list] ctx :flatten))))
 
 
 (defn parse-opt-block-item-list [token-seq ctx]
@@ -921,7 +921,7 @@
     ; or the start of a type specifier, then yes.  Otherwise, no.
     (if (l/next-token-in? remaining declaration-start-tokens)
       ; continue recursively
-      (p/continue-production pr [parse-declaration-specifiers] ctx)
+      (p/continue-production pr [parse-declaration-specifiers] ctx :flatten)
       ; we're done
       pr)))
 
@@ -996,7 +996,7 @@
       ; No more tokens, so end declaration list.
       pr
       ; Declaration list continues.
-      (p/continue-production pr [parse-declaration-list] ctx))))
+      (p/continue-production pr [parse-declaration-list] ctx :flatten))))
 
 
 (defn parse [token-seq]

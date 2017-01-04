@@ -162,6 +162,70 @@
   (assoc pr :node (node/relabel (:node pr) symbol)))
 
 
+;; Flatten a ParseResult by replacing a child node with the
+;; same symbol as the top-level node with the (recursive)
+;; child's children.
+;;
+;; Parameters:
+;;   pr - a ParseResult
+;;
+;; Returns:
+;;   ParseResult in which the node has been flattened
+;;
+(defn flatten-parse-result [pr]
+  ; Get the ParseResult's node, and find out what its symbol is.
+  (let [node (:node pr)
+        sym (:symbol node)]
+    (println "Flattening" sym)
+    ; Loop over children, building up new sequence of children
+    (loop [children (node/children node)
+           acc []]
+      (cond
+        (empty? children)
+        ; Return ParseResult with flattened node
+        (assoc pr :node (node/replace-children node acc))
+
+        ; If this child's symbol is the same as the parent,
+        ; copy all of its children into the accumulator and
+        ; continue recursively
+        (= (:symbol (first children)) sym)
+        (recur (rest children) (into acc (node/children (first children))))
+        
+        ; Child's symbol is different than parent, just append it
+        ; to the accumulator
+        :else
+        (recur (rest children) (conj acc (first children)))))))
+
+
+;; See: http://stackoverflow.com/questions/16264813/clojure-idiomatic-way-to-call-contains-on-a-lazy-sequence
+(defn lazy-contains? [col key]
+  (some #{key} col))
+
+
+;; Finish a ParseResult by handling any options.
+;; Currently, the only supported option is :flatten, which
+;; flattens recursive productions by replacing a
+;; child with the same symbol with that (recursive)
+;; child's children.
+;;
+;; FIXME: this is an O(N^2) algorithm.  Find a way to
+;; do this more efficiently.  Perhaps special versions of
+;; do-production and continue-production designed for
+;; generating a flat result.
+;;
+;; Parameters:
+;;   pr - an unfinished ParseResult
+;;   opts - options
+;;
+;; Returns:
+;;   finished ParseResult
+;;
+(defn finish-parse-result [pr opts]
+  (if (lazy-contains? opts :flatten)
+    (flatten-parse-result pr)
+    pr))
+
+
 ;; Apply a production (or part of a production) by expanding
 ;; symbols on the right-hand side of a production.
 ;;
@@ -171,19 +235,20 @@
 ;;   rhs          - is a sequence of symbol application functions (corresponding
 ;;                  to the symbols on the right hand side of the production being
 ;;                  applied)
-;;   ctx (optional) - the parsing context (if one is being used)
+;;   ctx          - the parsing context (if one is being used)
+;;   options      - options (optional)
 ;;
 ;; Returns: a ParseResult with a ParseNode containing the children
 ;; resulting from applying the symbol application functions, and
 ;; the remaining input tokens.
 ;;
-(defn continue-production [parse-result rhs ctx]
+(defn continue-production [parse-result rhs ctx & opts]
   (let [symbol (:symbol parse-result)]
     (loop [result parse-result
            fns rhs]
       (if (empty? fns)
         ; Done, no more symbol application functions to apply
-        result
+        (finish-parse-result result opts)
         ; Apply the next symbol application function and continue
         (let [rhs-fn (first fns)
               rhs-result (rhs-fn (:tokens result) ctx)]

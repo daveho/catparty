@@ -62,6 +62,20 @@
   (Node. (:symbol node) (conj (:value node) child) (:props node)))
 
 
+;; Replace the children of given node.
+;;
+;; Parameters:
+;;   node - a node
+;;   new-children - a new sequence of children
+;;
+;; Returns:
+;;   node with same data as original node, but with the
+;;   children replaced
+;;
+(defn replace-children [node new-children]
+  (assoc node :value new-children))
+
+
 ;; Relabel a node with a different symbol.
 ;;
 ;; Parameters:
