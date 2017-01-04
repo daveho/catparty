@@ -398,7 +398,9 @@
     
     ; At this point, a left parenthesis can only indicate grouping
     (l/next-token-is? token-seq :lparen)
-    (p/do-production :direct_declarator_base [parse-declarator] token-seq ctx)
+    (p/do-production :direct_declarator_base [(p/expect :lparen)
+                                              parse-declarator
+                                              (p/expect :rparen)] token-seq ctx)
     
     ; At this point, we don't have a viable concrete direct declarator base,
     ; but we can still get a viable abstract one as long as there was
@@ -434,7 +436,7 @@
 (defn parse-parameter-declaration [token-seq ctx]
   (let [pr (p/do-production :parameter_declaration [parse-declaration-specifiers] token-seq ctx)
         remaining (:tokens pr)]
-    (if (l/next-token-in? remaining #{:comma :lparen})
+    (if (l/next-token-in? remaining #{:comma :rparen})
       ; no declarator (concrete or abstract)
       pr
       ; there is a declarator
@@ -786,7 +788,7 @@
 
 (def testprog
 "
-int f(int, double x)
+int f(int, double x, float (y))
 {
     int q;
     h;
