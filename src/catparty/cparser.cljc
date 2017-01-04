@@ -177,7 +177,6 @@
         (p/do-production :literal [(p/expect tt)] token-seq ctx)))))
 
 
-;; FIXME: just a placeholder for now, only allows literals
 (defn parse-primary [token-seq ctx]
   (if (empty? token-seq)
     (exc/throw-exception "Unexpected end of input")
@@ -437,7 +436,7 @@
         remaining (:tokens pr)]
     (if (l/next-token-is? remaining :comma)
       ; Continue recursively
-      (p/continue-production pr [parse-struct-declarator-list] ctx)
+      (p/continue-production pr [(p/expect :comma) parse-struct-declarator-list] ctx)
       ; No more declarators, so we're done
       pr)))
 
@@ -1012,8 +1011,7 @@
 (def testprog
 "
 struct Point {
-    int x;
-    int y;
+    int x, y;
 };
 
 int f(int, double x, float (y))
