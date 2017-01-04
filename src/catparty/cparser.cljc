@@ -25,18 +25,31 @@
 ;;    http://www.cs.dartmouth.edu/~mckeeman/cs48/references/c.html
 
 
-(def storage-class-specifiers
+(def storage-class-specifier-tokens
   #{:kw_typedef :kw_extern :kw_static :kw_auto :kw_register})
 
-(def type-specifiers
+; Single-token type specifiers: excludes typedef names and
+; struct/union types.
+(def type-specifier-tokens
   #{:kw_void :kw_char :kw_short :kw_int :kw_long :kw_float :kw_double :kw_signed :kw_unsigned})
 
-(def declaration-specifiers (set/union storage-class-specifiers type-specifiers))
-
-(def type-qualifiers
+(def type-qualifier-tokens
   #{:kw_const :kw_restrict :kw_volatile})
 
-(def type-specifiers-and-qualifiers (set/union type-specifiers type-qualifiers))
+;; Tokens that can start a type specifier.
+;; FIXME: does not handle typedef names
+(def type-specifier-start-tokens
+  (set/union type-specifier-tokens #{:kw_struct :kw_union}))
+
+;; Tokens that can start a type specifier or qualifier.
+;; FIXME: does not handle typedef names
+(def type-specifier-or-qualifier-start-tokens
+  (set/union type-qualifier-tokens type-specifier-start-tokens))
+
+;; Single token declaration specifiers.
+;; Note that these do not include typedef names and
+;; struct/union types.
+;(def declaration-specifiers (set/union storage-class-specifiers type-specifiers type-qualifiers))
 
 ;; Set of tokens that can begin a declarator
 (def declarator-start-tokens
@@ -64,14 +77,17 @@
 (def inc-dec-operators
   #{:op_inc :op_dec})
 
-;; Tokens that can start a postfix suffix
+;; Tokens that can start a postfix expression suffix
 (def postfix-suffix-start-tokens
   (set/union #{:lbracket :lparen :dot :op_arrow} inc-dec-operators))
 
 ;; Tokens that can start a declaration.
 ;; FIXME: need to handle typedef names.
 (def declaration-start-tokens
-  (set/union type-specifiers-and-qualifiers #{:kw_struct :kw_union}))
+  (set/union storage-class-specifier-tokens
+             type-specifier-tokens
+             type-qualifier-tokens
+             #{:kw_struct :kw_union}))
 
 ;; Binary operator precedences:
 ;; note that comma, assignment, and conditionals (?:) are
@@ -110,6 +126,15 @@
   (into {} (map (fn [k] [k :left]) (keys binop-precedence))))
 
 
+(defn format-err [msg token-seq]
+  (let [where (if (empty? token-seq)
+                "<EOF>"
+                (let [[lexeme token-type lnum cnum] (first token-seq)]
+                  (str "Line " lnum ", char " cnum ", next token '" lexeme "'")))]
+    (str msg ": at " where)))
+                      
+
+
 (def is-literal? (l/make-token-type-pred literals))
 
 ;; FIXME: this needs to handle typedef names
@@ -119,10 +144,10 @@
 (defn parse-literal [token-seq ctx]
   ;(println "Parsing literal!")
   (if (empty? token-seq)
-    (exc/throw-exception "Unexpected end of input")
+    (exc/throw-exception (format-err "Unexpected end of input" token-seq))
     (let [tt (l/next-token-type token-seq)]
       (if (not (l/next-token-matches? token-seq is-literal?))
-        (exc/throw-exception (str "Expected literal, saw " tt))
+        (exc/throw-exception (format-err (str "Expected literal, saw " tt) token-seq))
         (p/do-production :literal [(p/expect tt)] token-seq ctx)))))
 
 
@@ -191,7 +216,7 @@
     (p/do-production :post_decrement [(p/expect :op_dec)] token-seq ctx)
     
     ; This should not happen
-    :else (exc/throw-exception "Invalid postfix suffix")))
+    :else (exc/throw-exception (format-err "Invalid postfix suffix" token-seq))))
 
 
 (defn parse-postfix-suffix-list [token-seq ctx]
@@ -229,10 +254,26 @@
     (p/do-production :unary_expression [parse-postfix-expression] token-seq ctx)))
 
 
-;; FIXME: this is just a placeholder fo now: it just parses a sequence of
-;; type specifiers and type qualifiers
+(declare parse-specifier-qualifier-list)
+(declare parse-declarator)
+(declare update-declarator-context)
+
+
 (defn parse-type-name [token-seq ctx]
-  (p/accept-matching :type_name (l/make-token-type-pred type-specifiers-and-qualifiers) token-seq))
+  ; Current state is:
+  ;    type-name -> ^ specifier-qualifier-list
+  ;    type-name -> ^ specifier-qualifier-list abstract-declarator
+  (let [pr (p/do-production :type_name [parse-specifier-qualifier-list] token-seq ctx)
+        remaining (:tokens pr)]
+    ; type names only appear in cast and sizeof expressions,
+    ; and are always surrounding by parentheses.  So, if we
+    ; look ahead and see a right paren, then there is definitely
+    ; no abstract declarator.
+    (if (l/next-token-is? remaining :rparen)
+      ; We're done
+      pr
+      ; Parse an abstract declarator
+      (p/continue-production pr [parse-declarator] (update-declarator-context ctx :allow_abstract)))))
 
 
 ;; TODO: just a place holder for now (allowing only integer literals)
@@ -250,20 +291,14 @@
 
 
 (defn parse-logical-or-expression [token-seq ctx]
-  (let [ctx2 (assoc ctx :operators c-infix-operators)]
-    (let [pr (p/parse-infix-expression token-seq ctx2)]
-      (do
-        ;(println "After infix parsing: " (:tokens pr))
-        pr
-        )
-      )))
+  (p/parse-infix-expression token-seq (assoc ctx :operators c-infix-operators)))
 
 
 (declare parse-expression)
 
 
 (defn parse-conditional-expression [token-seq ctx]
-  ; State is:
+  ; Current state is:
   ;   conditional-expression -> ^ logical-or-expression
   ;   conditional-expression -> ^ logical-or-expression '?' expression : conditional-expression
   ; Start by parsing a logical or expression.
@@ -286,7 +321,7 @@
 
 
 (defn parse-assignment-expression [token-seq ctx]
-  ; State is:
+  ; Current state is:
   ;    assignment-expression -> ^ conditional-expression
   ;    assignment-expression -> ^ conditional-expression assignment-operator assignment-expression
   ; Note that in K&R the beginning of the right hand side of the
@@ -308,7 +343,7 @@
 
 
 (defn parse-expression [token-seq ctx]
-  ; State is:
+  ; Current state is:
   ;   expression -> ^ assignment-expression
   ;   expression -> ^ assignment-expression ',' expression
   (let [pr (p/do-production :expression [parse-assignment-expression] token-seq ctx)
@@ -323,9 +358,162 @@
       )))
 
 
+(declare parse-declarator)
+(declare parse-type-specifier)
+(declare parse-type-qualifier)
+
+
+;; FIXME: does not handle
+;;   - typedef name
+;;   - enum specifier
+(defn parse-specifier-qualifier-list [token-seq ctx]
+  ; Current state is:
+  ;    specifier-qualifier-list -> ^ type-specifier
+  ;    specifier-qualifier-list -> ^ type-qualifier
+  ;    specifier-qualifier-list -> ^ type-specifier specifier-qualifier-list
+  ;    specifier-qualifier-list -> ^ type-qualifier specifier-qualifier-list
+  (let [pr (p/do-production :specifier_qualifier_list
+                            [(if (l/next-token-in? token-seq type-qualifier-tokens)
+                               parse-type-qualifier
+                               parse-type-specifier)] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-in? remaining type-specifier-or-qualifier-start-tokens)
+      ; continue recursively
+      (p/continue-production pr [parse-specifier-qualifier-list] ctx)
+      ; we're done
+      pr)))
+
+;; Update parsing context to allow concrete and/or abstract
+;; declarators.  Ensures that neither :allow_concrete or :allow_abstract
+;; properties are left set unintentionally.
+;;
+;; Parameters:
+;;   ctx - current parsing context (all properties will be preserved
+;;         except for :allow_concrete and :allow_abstract)
+;;   allowed - properties indicating which kinds of declarators
+;;             are allowed (:allow_abstract and/or :allow_concrete)
+;;
+;; Returns:
+;;   Updated parsing context which only allowed declarator types
+;;   enabled.
+;;
+(defn update-declarator-context [ctx & allowed]
+  (let [sanitized-context (dissoc ctx :allow_concrete :allow_abstract)]
+    (into sanitized-context (map vector allowed (repeat true)))))
+
+
+(defn parse-struct-declarator [token-seq ctx]
+  ; Current state is:
+  ;    struct-declarator -> ^ ':' constant-expression
+  ;    struct-declarator -> ^ declarator ':' constant-expression
+  ;    struct-declarator -> ^ declarator
+  (if (l/next-token-is? token-seq :colon)
+    ; Unnamed bitfield
+    (p/do-production :struct_declarator [(p/expect :colon) parse-constant-expression] token-seq ctx)
+    ; Named field: parse a named field (concrete declarator followed by
+    ; optional bitfield)
+    (let [pr (p/do-production :struct_declarator
+                              [parse-declarator]
+                              token-seq
+                              (update-declarator-context ctx :allow_concrete))
+          remaining (:tokens pr)]
+      (if (l/next-token-is? remaining :colon)
+        ; Parse bitfield
+        (p/continue-production pr [(p/expect :colon) parse-constant-expression] ctx)
+        ; No bitfield, so we're done
+        pr))))
+
+
+(defn parse-struct-declarator-list [token-seq ctx]
+  (let [pr (p/do-production :struct_declarator_list [parse-struct-declarator] token-seq ctx)
+        remaining (:tokens pr)]
+    (if (l/next-token-is? remaining :comma)
+      ; Continue recursively
+      (p/continue-production pr [parse-struct-declarator-list] ctx)
+      ; No more declarators, so we're done
+      pr)))
+
+
+(defn parse-struct-declaration [token-seq ctx]
+  (p/do-production :struct_declaration
+                   [parse-specifier-qualifier-list parse-struct-declarator-list (p/expect :semicolon)]
+                   token-seq
+                   ctx))
+
+
+(defn parse-struct-declaration-list [token-seq ctx]
+  (let [pr (p/do-production :struct_declaration_list [parse-struct-declaration] token-seq ctx)
+        remaining (:tokens pr)]
+    ; See if there are more declarations
+    (if (l/next-token-is? remaining :rbrace)
+      ; No more declarations
+      pr
+      ; Continue recursively
+      (p/continue-production pr [parse-struct-declaration-list] ctx))))
+
+
+(defn complete-with-struct-declaration-list [pr remaining ctx]
+  (p/continue-production pr [(p/expect :lbrace) parse-struct-declaration-list (p/expect :rbrace)] ctx))
+
+
+(defn parse-struct-or-union-specifier [token-seq ctx]
+  ; Current state is:
+  ;   struct-or-union-specifier -> ^ struct-or-union '{' struct-declaration-list '}'
+  ;   struct-or-union-specifier -> ^ struct-or-union identifier '{' struct-declaration-list '}'
+  ;   struct-or-union-specifier -> ^ struct-or-union identifier
+  (if (not (l/next-token-in? token-seq #{:kw_struct :kw_union}))
+    (exc/throw-exception (format-err "Expected 'struct' or 'union'") token-seq)
+    ; Start with just the 'struct' or 'union' keyword
+    (let [pr (p/do-production :struct_or_union_specifier
+                              [(p/expect (l/next-token-type token-seq))]
+                              token-seq ctx)
+          remaining (:tokens pr)]
+      ; Struct declaration list follows immediately?
+      (if (l/next-token-is? remaining :lbrace)
+        ; Unnamed struct or union
+        (complete-with-struct-declaration-list pr remaining ctx)
+        ; Named struct or union, get the name
+        (let [pr2 (p/continue-production pr [(p/expect :identifier)] ctx)
+              remaining2 (:tokens pr2)]
+          (if (l/next-token-is? remaining2 :lbrace)
+            ; Has struct declaration list
+            (complete-with-struct-declaration-list pr2 remaining2 ctx)
+            ; No struct declaration list
+            pr2))))))
+
+
+(defn parse-type-specifier [token-seq ctx]
+  (cond
+    ; Single token type specifier?
+    (l/next-token-in? token-seq type-specifier-tokens)
+    (p/do-production :type_specifier [(p/expect (l/next-token-type token-seq))] token-seq ctx)
+    
+    ; Struct or union specifier?
+    (l/next-token-in? token-seq #{:kw_struct :kw_union})
+    (p/do-production :type_specifier [parse-struct-or-union-specifier] token-seq ctx)
+    
+    ; TODO:
+    ;   - handle typedef names
+    ;   - handle enum specifier
+    :else (exc/throw-exception (format-err "Expected: type specifier" token-seq))))
+
+
+(defn parse-type-qualifier [token-seq ctx]
+  (if (not (l/next-token-in? token-seq type-qualifier-tokens))
+    (exc/throw-exception (format-err "Expected type qualifier" token-seq))
+    (p/do-production :type_qualifier [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
+
+
+
+(defn parse-storage-class-specifier [token-seq ctx]
+  (if (not (l/next-token-in? token-seq storage-class-specifier-tokens))
+    (exc/throw-exception (format-err "Expected storage class specifier" token-seq))
+    (p/do-production :storage_class_specifier [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
+
+
 (defn parse-type-qualifier-list [token-seq ctx]
   (p/accept-matching :type_qualifier_list
-                     (l/make-token-type-pred type-qualifiers)
+                     (l/make-token-type-pred type-qualifier-tokens)
                      token-seq))
 
 
@@ -380,7 +568,7 @@
 ;;     int *
 ;;
 (defn parse-direct-declarator-base [token-seq ctx]
-  ; State is:
+  ; Current state is:
   ;   direct-declarator-base -> ^ identifier           -- concrete only
   ;   direct-declarator-base -> ^ '(' declarator ')'   -- either concrete or abstract
   ;   direct-declarator-base -> ^ epsilon              -- abstract only
@@ -409,8 +597,8 @@
     (p/do-production :direct_declarator_base [] token-seq ctx)
     
     :else
-    (exc/throw-exception "No viable declarator base") ; FIXME: need better error message
-  ))
+    ; FIXME: need better error message
+    (exc/throw-exception (format-err "No viable declarator base" token-seq))))
 
 
 (declare parse-declaration-specifiers)
@@ -442,7 +630,7 @@
       ; there is a declarator
       (p/continue-production pr
                              [parse-declarator]
-                             (assoc ctx :allow_concrete true :allow_abstract true)))))
+                             (update-declarator-context ctx :allow_concrete :allow_abstract)))))
 
 
 (defn parse-parameter-list [token-seq ctx]
@@ -681,7 +869,10 @@
 ;;
 (defn parse-init-declarator [token-seq ctx]
   ;; An init declarator must be concrete (not abstract)
-  (let [pr (p/do-production :init_declarator [parse-declarator] token-seq (assoc ctx :allow_concrete true))
+  (let [pr (p/do-production :init_declarator
+                            [parse-declarator]
+                            token-seq
+                            (update-declarator-context ctx :allow_concrete))
         remaining (:tokens pr)]
     (cond
      ; If the next token is the assignment operator,
@@ -701,14 +892,44 @@
      :else pr)))
 
 
+;; Return appropriate declaration specifier parse function
+;; according to what the next token in the token sequence is.
+(defn choose-declaration-specifier-parse-fn [token-seq]
+  (cond
+    (l/next-token-in? token-seq storage-class-specifier-tokens)
+    parse-storage-class-specifier
+    
+    (l/next-token-in? token-seq type-qualifier-tokens)
+    parse-type-qualifier
+    
+    :else
+    parse-type-specifier))
+
+
 (defn parse-declaration-specifiers [token-seq ctx]
-  (p/accept-matching :declaration_specifiers
-                     (l/make-token-type-pred declaration-specifiers)
-                     token-seq))
+  ; Current state is:
+  ;    declaration-specifiers -> ^ storage-class-specifier
+  ;    declaration-specifiers -> ^ type-specifier
+  ;    declaration-specifiers -> ^ type-qualifier
+  ;    declaration-specifiers -> ^ storage-class-specifier declaration-specifiers
+  ;    declaration-specifiers -> ^ type-specifier declaration-specifiers
+  ;    declaration-specifiers -> ^ type-qualifier declaration-specifiers
+  (let [pr (p/do-production :declaration_specifiers
+                            [(choose-declaration-specifier-parse-fn token-seq)]
+                            token-seq ctx)
+        remaining (:tokens pr)]
+    ; How to tell if declaration specifiers continue?
+    ; If we look ahead and see a storage class specifier, a type qualifier,
+    ; or the start of a type specifier, then yes.  Otherwise, no.
+    (if (l/next-token-in? remaining declaration-start-tokens)
+      ; continue recursively
+      (p/continue-production pr [parse-declaration-specifiers] ctx)
+      ; we're done
+      pr)))
 
 
 (defn parse-init-declarator-list [token-seq ctx]
-  ; Initial state:
+  ; Current state is:
   ;   init-declarator-list -> ^ init-declarator
   ;   init-declarator-list -> ^ init-declarator ',' init-declarator-list
   ; Start by parsing just an init declarator.
@@ -738,7 +959,7 @@
     ; there is at least one declarator
     (p/do-production :opt_init_declarator_list [parse-init-declarator-list] token-seq ctx)
     ; no declarators
-    (p/do-production :opt_init_declarator_list [] token-seq)))
+    (p/do-production :opt_init_declarator_list [] token-seq ctx)))
 
 
 ; Check whether given node is a function definition.
@@ -766,7 +987,7 @@
 
 
 (defn parse-declaration-list [token-seq ctx]
-  ; Initial state is:
+  ; Current state is:
   ;   declaration-list -> ^ declaration
   ;   declaration-list -> ^ declaration declaration-list
   ; Start by parsing just a declaration.
@@ -786,8 +1007,14 @@
 
 ;; Just for testing...
 
+; int x, y;
 (def testprog
 "
+struct Point {
+    int x;
+    int y;
+};
+
 int f(int, double x, float (y))
 {
     int q;
