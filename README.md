@@ -47,7 +47,6 @@ Supported features in the C parser are approximately:
 ## What doesn't work
 
 * typedef names
-* struct and union type specifiers
 * preprocessor (completely nonexistent)
 * probably lots of other stuff
 
