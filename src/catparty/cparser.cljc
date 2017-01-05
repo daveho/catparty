@@ -152,14 +152,6 @@
 ;; Functions
 ;; ----------------------------------------------------------------------
 
-(defn format-err [msg token-seq]
-  (let [where (if (empty? token-seq)
-                "<EOF>"
-                (let [[lexeme token-type lnum cnum] (first token-seq)]
-                  (str "Line " lnum ", char " cnum ", next token '" lexeme "'")))]
-    (str msg ": at " where)))
-                      
-
 
 (def is-literal? (l/make-token-type-pred literals))
 
@@ -170,10 +162,10 @@
 (defn parse-literal [token-seq ctx]
   ;(println "Parsing literal!")
   (if (empty? token-seq)
-    (exc/throw-exception (format-err "Unexpected end of input" token-seq))
+    (exc/throw-exception (l/format-err "Unexpected end of input" token-seq))
     (let [tt (l/next-token-type token-seq)]
       (if (not (l/next-token-matches? token-seq is-literal?))
-        (exc/throw-exception (format-err (str "Expected literal, saw " tt) token-seq))
+        (exc/throw-exception (l/format-err (str "Expected literal, saw " tt) token-seq))
         (p/do-production :literal [(p/expect tt)] token-seq ctx)))))
 
 
@@ -236,7 +228,7 @@
     (p/do-production :post_decrement [(p/expect :op_dec)] token-seq ctx)
     
     ; This should not happen
-    :else (exc/throw-exception (format-err "Invalid postfix suffix" token-seq))))
+    :else (exc/throw-exception (l/format-err "Invalid postfix suffix" token-seq))))
 
 
 (defn parse-postfix-suffix-list [token-seq ctx]
@@ -252,7 +244,7 @@
 (defn parse-postfix-expression [token-seq ctx]
   (let [pr (p/do-production :postfix_expression [parse-primary] token-seq ctx)
         remaining (:tokens pr)]
-    (if (l/next-token-in? token-seq postfix-suffix-start-tokens)
+    (if (l/next-token-in? remaining postfix-suffix-start-tokens)
       ; parse one or more postfix suffixes
       (p/continue-production pr [parse-postfix-suffix-list] ctx)
       ; no postfix suffixes
@@ -469,7 +461,7 @@
   ;   struct-or-union-specifier -> ^ struct-or-union identifier '{' struct-declaration-list '}'
   ;   struct-or-union-specifier -> ^ struct-or-union identifier
   (if (not (l/next-token-in? token-seq #{:kw_struct :kw_union}))
-    (exc/throw-exception (format-err "Expected 'struct' or 'union'") token-seq)
+    (exc/throw-exception (l/format-err "Expected 'struct' or 'union'") token-seq)
     ; Start with just the 'struct' or 'union' keyword
     (let [pr (p/do-production :struct_or_union_specifier
                               [(p/expect (l/next-token-type token-seq))]
@@ -502,19 +494,19 @@
     ; TODO:
     ;   - handle typedef names
     ;   - handle enum specifier
-    :else (exc/throw-exception (format-err "Expected: type specifier" token-seq))))
+    :else (exc/throw-exception (l/format-err "Expected: type specifier" token-seq))))
 
 
 (defn parse-type-qualifier [token-seq ctx]
   (if (not (l/next-token-in? token-seq type-qualifier-tokens))
-    (exc/throw-exception (format-err "Expected type qualifier" token-seq))
+    (exc/throw-exception (l/format-err "Expected type qualifier" token-seq))
     (p/do-production :type_qualifier [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
 
 
 
 (defn parse-storage-class-specifier [token-seq ctx]
   (if (not (l/next-token-in? token-seq storage-class-specifier-tokens))
-    (exc/throw-exception (format-err "Expected storage class specifier" token-seq))
+    (exc/throw-exception (l/format-err "Expected storage class specifier" token-seq))
     (p/do-production :storage_class_specifier [(p/expect (l/next-token-type token-seq))] token-seq ctx)))
 
 
@@ -604,7 +596,7 @@
     
     :else
     ; FIXME: need better error message
-    (exc/throw-exception (format-err "No viable declarator base" token-seq))))
+    (exc/throw-exception (l/format-err "No viable declarator base" token-seq))))
 
 
 ;; Parameter declarations!
@@ -792,6 +784,7 @@
 
 
 (defn parse-expression-statement [token-seq ctx]
+  (println "Parsing expression statement")
   (p/do-production :expression_statement [parse-expression (p/expect :semicolon)] token-seq ctx))
 
 
@@ -1008,18 +1001,25 @@
 ;; ----------------------------------------------------------------------
 
 ; int x, y;
-(def testprog
-"
-struct Point {
-    int x, y;
-};
 
-int f(int, double x, float (y))
-{
-    int q;
-    h;
-}
-")
+
+(def testprog
+"int main(void) {
+    printf(\"Hello, world!\\n\");
+}"
+)
+
+;"
+;struct Point {
+;    int x, y;
+;};
+;
+;int f(int, double x, float (y))
+;{
+;    int q;
+;    h;
+;}
+;"
 
 ;int x;
 ;char *p;
@@ -1037,9 +1037,6 @@ int f(int, double x, float (y))
 (def c-punct-tokens (set (map #(second %) cl/c-punct-patterns)))
 (def c-punct-tokens-discard (disj c-punct-tokens :ellipsis))
 (defn c-node-filter [n]
-  (let [symbol (:symbol n)
-        match (not (contains? c-punct-tokens-discard symbol))]
-    ;(println "Match" symbol "=>" match)
-    match))
+  (not (contains? c-punct-tokens-discard (:symbol n))))
 
 (def ft (node/filter-tree t c-node-filter))

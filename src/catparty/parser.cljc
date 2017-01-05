@@ -77,10 +77,10 @@
         ; Check whether next token matches expected token type
         (if (not (l/token-is-type? next-token expected-token-type))
           ; Wrong token type seen
-          (exc/throw-exception (str "Expected "
-                                    expected-token-type
-                                    ", saw "
-                                    (l/get-token-type next-token)))
+          (exc/throw-exception (l/format-err (str "Expected "
+                                                  expected-token-type
+                                                  ", saw "
+                                                  (l/get-token-type next-token)) token-seq))
           ; Consume the token and return a ParseResult
           (ParseResult. (make-terminal-node next-token) (rest token-seq)))))))
 

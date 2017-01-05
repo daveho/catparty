@@ -14,7 +14,26 @@
 ;; All that language-specific lexers need to provide is a sequence
 ;; of patterns.  Each pattern is a regex and a token type.
 
-;; Fields are:
+
+;; Format an error message to have information about where
+;; the error occurred in the input token sequence.
+;;
+;; Parameters:
+;;   msg - error message
+;;   token-seq - input token sequence at the point of the error
+;;
+;; Returns:
+;;   formatted error message with information about where
+;;   the error occurred
+;;
+(defn format-err [msg token-seq]
+  (let [where (if (empty? token-seq)
+                "<EOF>"
+                (let [[lexeme token-type lnum cnum] (first token-seq)]
+                  (str "Line " lnum ", char " cnum ", next token '" lexeme "'")))]
+    (str msg ": at " where)))
+
+;; Lexer data type. Fields are:
 ;;    lineseq - sequence of input lines remaining after current line
 ;;    line - current line
 ;;    tok - next token to be returned

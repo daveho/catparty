@@ -239,6 +239,7 @@
     ; Do nothing 
     n
     ; Replace children with filtered sequence (just the children
-    ; that match the predicate)
+    ; that match the predicate), in which each child is
+    ; recursively filtered
     (let [children (map #(filter-tree % pred) (filter pred (:value n)))]
       (replace-children n children))))
