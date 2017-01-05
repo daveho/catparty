@@ -176,7 +176,7 @@
   ; Get the ParseResult's node, and find out what its symbol is.
   (let [node (:node pr)
         sym (:symbol node)]
-    (println "Flattening" sym)
+    ;(println "Flattening" sym)
     ; Loop over children, building up new sequence of children
     (loop [children (node/children node)
            acc []]

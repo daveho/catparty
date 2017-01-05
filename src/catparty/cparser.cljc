@@ -1032,3 +1032,14 @@ int f(int, double x, float (y))
 
 (def token-seq (l/token-sequence (cl/create-from-string testprog)))
 (def t (parse token-seq))
+
+;; Create a view of the parse tree in which some nodes are filtered out.
+(def c-punct-tokens (set (map #(second %) cl/c-punct-patterns)))
+(def c-punct-tokens-discard (disj c-punct-tokens :ellipsis))
+(defn c-node-filter [n]
+  (let [symbol (:symbol n)
+        match (not (contains? c-punct-tokens-discard symbol))]
+    ;(println "Match" symbol "=>" match)
+    match))
+
+(def ft (node/filter-tree t c-node-filter))

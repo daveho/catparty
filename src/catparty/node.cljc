@@ -220,3 +220,25 @@
     (if (nil? n)
       false
       (pred n))))
+
+
+;; Create a "filtered" view of a tree rooted at specified node.
+;; Only the children selected by the specified predicate function will
+;; be visible in the tree.
+;;
+;; Parameters:
+;;   n - a Node
+;;   pred - a Node predicate
+;;
+;; Returns:
+;;   a view of the tree rooted at n in which nodes not matched by the
+;;   predicate are not visible; note that n itself cannot be made invisible
+;;
+(defn filter-tree [n pred]
+  (if (not (has-children? n))
+    ; Do nothing 
+    n
+    ; Replace children with filtered sequence (just the children
+    ; that match the predicate)
+    (let [children (map #(filter-tree % pred) (filter pred (:value n)))]
+      (replace-children n children))))
