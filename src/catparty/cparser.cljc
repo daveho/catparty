@@ -1040,3 +1040,30 @@
   (not (contains? c-punct-tokens-discard (:symbol n))))
 
 (def ft (node/filter-tree t c-node-filter))
+
+
+(def eliminate-when-one-child
+  #{:expression :assignment_expression :conditional_expression
+    :cast_expression :unary_expression :postfix_expression :primary})
+
+;; Translate tree to get rid of unnecessary one-child nonterminal
+;; nodes.
+(defn simplify-tree [n]
+  (let [sym (:symbol n)
+        nchildren (node/num-children n)]
+    (cond
+      ; Nothing to do if there are no children
+      (= nchildren 0) n
+      
+      ; If there's one child, and the node type is one of the ones
+      ; to eliminate in the one-child case, recur on the child
+      (and (= nchildren 1) (contains? eliminate-when-one-child sym))
+      (recur (node/get-child n 0))
+      
+      ; This node has children, but either it has more than one,
+      ; or it's not one that should be eliminated.  Return a
+      ; translated version in which the simplification is
+      ; performed recursively on the children.
+      :else (node/replace-children n (map simplify-tree (node/children n))))))
+
+(def sft (simplify-tree ft))
