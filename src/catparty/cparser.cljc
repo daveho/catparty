@@ -169,14 +169,14 @@
         (p/do-production :literal [(p/expect tt)] token-seq ctx)))))
 
 
-(defn parse-primary [token-seq ctx]
+(defn parse-primary-expression [token-seq ctx]
   (if (empty? token-seq)
     (exc/throw-exception "Unexpected end of input")
     (let [tt (l/next-token-type token-seq)]
       (case tt
-        :lparen (p/do-production :primary [(p/expect :lparen) parse-expression (p/expect :rparen)] token-seq ctx)
-        :identifier (p/do-production :primary [(p/expect :identifier)] token-seq ctx)
-        (p/do-production :primary [parse-literal] token-seq ctx)))))
+        :lparen (p/do-production :primary_expression [(p/expect :lparen) parse-expression (p/expect :rparen)] token-seq ctx)
+        :identifier (p/do-production :primary_expression [(p/expect :identifier)] token-seq ctx)
+        (p/do-production :primary_expression [parse-literal] token-seq ctx)))))
 
 
 (defn parse-argument-expression-list [token-seq ctx]
@@ -242,7 +242,7 @@
 
 
 (defn parse-postfix-expression [token-seq ctx]
-  (let [pr (p/do-production :postfix_expression [parse-primary] token-seq ctx)
+  (let [pr (p/do-production :postfix_expression [parse-primary-expression] token-seq ctx)
         remaining (:tokens pr)]
     (if (l/next-token-in? remaining postfix-suffix-start-tokens)
       ; parse one or more postfix suffixes
@@ -1044,7 +1044,7 @@
 
 (def eliminate-when-one-child
   #{:expression :assignment_expression :conditional_expression
-    :cast_expression :unary_expression :postfix_expression :primary})
+    :cast_expression :unary_expression :postfix_expression :primary_expression})
 
 ;; Translate tree to get rid of unnecessary one-child nonterminal
 ;; nodes.
