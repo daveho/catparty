@@ -951,7 +951,10 @@
        ; update the parsing context to indicate that function definitions
        ; will not be allowed.  (See above :-)
        (l/next-token-is? remaining :comma)
-       (p/continue-production pr [(p/expect :comma) parse-init-declarator-list] (dissoc ctx :allow_func))
+       (p/continue-production pr
+                              [(p/expect :comma) parse-init-declarator-list]
+                              (dissoc ctx :allow_func)
+                              :flatten)
 
        ; No more declarators, so end the production here
        :else pr))))
@@ -969,6 +972,65 @@
 ; Check whether given node is a function definition.
 (defn is-function-definition? [node]
   (= (:symbol node) :function_definition))
+
+
+;; Determine whether specified declaration specifiers indicate a typedef.
+;;
+;; Parameters:
+;;   decl-spec-node - declaration specifiers node
+;;
+;; Return:
+;;   true if typedef is specified, false otherwise
+;;
+(defn is-typedef? [decl-spec-node]
+  ; Because the :declaration_specifiers node is flattened,
+  ; its children are the declaration specifiers.  So, we just
+  ; need to look for one that's a typedef.
+  (let [is-typedef-specifier? (fn [child]
+                                (node/check-node child [0] #(= :kw_typedef (:symbol %))))]
+    (some is-typedef-specifier? (node/children decl-spec-node))))
+
+
+;; Get the declarator name from an :init_declarator node.)
+(defn get-init-declarator-name [init-declarator]
+  (let [identifier (node/search init-declarator #(= (:symbol %) :identifier))]
+    (:value identifier)))
+
+
+;; Return set of declarator names.
+;;
+;; Parameters:
+;;   opt-init-declarator-list - an :opt_init_declarator_list node
+;;
+;; Returns:
+;;   set of declarator names
+;;
+(defn find-declarator-names [opt-init-declarator-list]
+  (if (not (node/has-children? opt-init-declarator-list))
+    ; No actual declarators
+    #{}
+    ; Grab names from the declarators.
+    (let [init-declarator-list (node/get-child opt-init-declarator-list 0)]
+      (into #{} (map get-init-declarator-name (node/children init-declarator-list))))))
+
+
+;; Return set of typedef names found in a declaration ParseResult.
+;;
+;; Parameters:
+;;   pr - a declaration ParseResult
+;;
+;; Returns:
+;;   set of typedef names (empty if the declaration is not a typedef)
+;;
+(defn find-typedef-names [pr]
+  (let [decl-node (:node pr)
+        decl-spec-node (node/get-child decl-node 0)
+        opt-init-declarator-list (node/get-child decl-node 1)]
+    (if (not (is-typedef? decl-spec-node))
+      ; Declaration is not a typedef.
+      #{}
+      ; Typedef: all of the declarators are typedef names.
+      (find-declarator-names opt-init-declarator-list))))
 
 
 (defn parse-declaration [token-seq ctx]
@@ -1081,7 +1143,9 @@
 
 
 (def testprog
-"int main(void) {
+"typedef int foo;
+
+int main(void) {
     printf(\"Hello, world!\\n\");
 }"
 )

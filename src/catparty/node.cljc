@@ -243,3 +243,20 @@
     ; recursively filtered
     (let [children (map #(filter-tree % pred) (filter pred (:value n)))]
       (replace-children n children))))
+
+
+;; Recursively search (preorder) tree rooted at given node
+;; for a node matching given predicate.
+;;
+;; Parameters:
+;;   n - a Node
+;;   pred - a Node predicate
+;;
+;; Returns:
+;;   a Node matching the predicate, or nil if there is no such node
+;;
+(defn search [n pred]
+  (cond
+    (pred n) n
+    (not (has-children? n)) nil
+    :else (first (filter pred (children n)))))
