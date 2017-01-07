@@ -912,8 +912,10 @@
     (if (l/next-token-is? remaining :rbrace)
       ; end of block item list
       pr
-      ; there is at least one more block item
-      (p/continue-production pr [parse-block-item-list] ctx :flatten))))
+      ; There is at least one more block item.
+      ; Update typedef names in context.
+      (let [ctx2 (update-context-typedef-names ctx pr)]
+        (p/continue-production pr [parse-block-item-list] ctx :flatten)))))
 
 
 (defn parse-opt-block-item-list [token-seq ctx]
