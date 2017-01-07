@@ -162,7 +162,102 @@
 
 
 ;; ----------------------------------------------------------------------
-;; Functions
+;; Parsing context functions
+;; ----------------------------------------------------------------------
+
+;; The parsing context is used for context-sensitive aspects of parsing,
+;; such as:
+;;   - whether function definitions are allowed
+;;   - whether abstract or concrete declarators are allowed
+;;   - which identifiers are typedef names
+
+
+;; Create an initial parsing context.
+(defn initial-context []
+  {; :allow_func controls whether parse-init-declarator will accept
+   ; a function definition.  True by default (since function definitions
+   ; are permitted in the top level scope.
+   :allow_func true,
+   ; Stack (list) of sets of typedef names.
+   ; The set on top is for the current scope.
+   :typedefs (list #{})
+   })
+
+
+;; Update parsing context to allow concrete and/or abstract
+;; declarators.  Ensures that neither :allow_concrete nor :allow_abstract
+;; properties are left set unintentionally.
+;;
+;; Parameters:
+;;   ctx - current parsing context (all properties will be preserved
+;;         except for :allow_concrete and :allow_abstract)
+;;   allowed - properties indicating which kinds of declarators
+;;             are allowed (:allow_abstract and/or :allow_concrete)
+;;
+;; Returns:
+;;   Updated parsing context which only allowed declarator types
+;;   enabled.
+;;
+(defn update-declarator-context [ctx & allowed]
+  (let [sanitized-context (dissoc ctx :allow_concrete :allow_abstract)]
+    (into sanitized-context (map vector allowed (repeat true)))))
+
+
+;; Enter a new scope for typedef names.
+;; All of the typedef names in the current scope are visible in the
+;; new scope.
+;;
+;; Parameters:
+;;   ctx - parsing context
+;;
+;; Returns:
+;;   Updated parsing context with new scope for typedef names
+;;
+(defn enter-scope [ctx]
+  (let [typedef-stack (:typedefs ctx)]
+    ; All of the typedef names in the outer scope are visible
+    ; in the new scope.
+    (assoc ctx :typedefs (cons (first typedef-stack) typedef-stack))))
+
+
+;; Update typedef names in context with the ones in the
+;; specified ParseResult.
+;;
+;; Parameters:
+;;   ctx - parsing context
+;;   pr - a ParseResult with (potentially) new typedef names
+;;
+;; Returns:
+;;   updated parsing context
+;;
+(defn update-context-typedef-names [ctx pr]
+  ; See if there actually are any typedef names in the ParseResult.
+  (if (nil? (:typedefs (:data pr)))
+    ; No typedef names in ParseResult, so context doesn't change.
+    ctx
+    ; Add all of ParseResult's typedef names to the
+    ; typedef names in the context's topmost scope.
+    (let [typedef-stack (:typedefs ctx)
+          top (first typedef-stack)
+          updated-typedef-names (set/union top (:typedefs (:data pr)))
+          updated-typedef-stack (cons updated-typedef-names (rest typedef-stack))]
+      (assoc ctx :typedefs updated-typedef-stack))))
+
+
+;; Get the typedef names in the current (topmost) scope.
+;;
+;; Parameters:
+;;   ctx - the parsing context
+;;
+;; Returns:
+;;   set of typedef names in the current scope
+;;
+(defn get-context-typedef-names [ctx]
+  (first (:typedefs ctx)))
+
+
+;; ----------------------------------------------------------------------
+;; Parsing functions
 ;; ----------------------------------------------------------------------
 
 
@@ -394,24 +489,6 @@
       (p/continue-production pr [parse-specifier-qualifier-list] ctx :flatten)
       ; we're done
       pr)))
-
-;; Update parsing context to allow concrete and/or abstract
-;; declarators.  Ensures that neither :allow_concrete nor :allow_abstract
-;; properties are left set unintentionally.
-;;
-;; Parameters:
-;;   ctx - current parsing context (all properties will be preserved
-;;         except for :allow_concrete and :allow_abstract)
-;;   allowed - properties indicating which kinds of declarators
-;;             are allowed (:allow_abstract and/or :allow_concrete)
-;;
-;; Returns:
-;;   Updated parsing context which only allowed declarator types
-;;   enabled.
-;;
-(defn update-declarator-context [ctx & allowed]
-  (let [sanitized-context (dissoc ctx :allow_concrete :allow_abstract)]
-    (into sanitized-context (map vector allowed (repeat true)))))
 
 
 (defn parse-struct-declarator [token-seq ctx]
@@ -852,9 +929,12 @@
 ;; function definitions are not allowed inside
 ;; a block.
 (defn parse-compound-statement [token-seq ctx]
-  (p/do-production :compound_statement [(p/expect :lbrace)
-                                        parse-opt-block-item-list
-                                        (p/expect :rbrace)] token-seq (dissoc ctx :allow_func)))
+  ; A compound statement introduces a new scope.
+  ; (The parser tracks typedef names in each scope.) 
+  (let [ctx2 (enter-scope ctx)]
+    (p/do-production :compound_statement [(p/expect :lbrace)
+                                          parse-opt-block-item-list
+                                          (p/expect :rbrace)] token-seq (dissoc ctx2 :allow_func))))
 
 
 ;; Ok, here is a complicated part of the parser.
@@ -1094,19 +1174,10 @@
       ; No more tokens, so end declaration list.
       pr
       ; Declaration list continues.
-      (p/continue-production pr [parse-declaration-list] ctx :flatten))))
-
-
-;; Create an initial parsing context.
-(defn initial-context []
-  {; :allow_func controls whether parse-init-declarator will accept
-   ; a function definition.  True by default (since function definitions
-   ; are permitted in the top level scope.
-   :allow_func true,
-   ; Stack (list) of sets of typedef names.
-   ; The set on top is for the current scope.
-   :typedefs (list #{})
-   })
+      ; Note that we update the context with any new typedef names
+      ; seen in the declaration just parsed.
+      (let [ctx2 (update-context-typedef-names ctx pr)]
+        (p/continue-production pr [parse-declaration-list] ctx2 :flatten)))))
 
 
 ;; Parse specified token sequence as a translation unit,
