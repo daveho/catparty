@@ -797,7 +797,7 @@
 
 
 (defn parse-expression-statement [token-seq ctx]
-  (println "Parsing expression statement")
+  ;(println "Parsing expression statement")
   (p/do-production :expression_statement [parse-expression (p/expect :semicolon)] token-seq ctx))
 
 
@@ -993,7 +993,14 @@
 
 ;; Get the declarator name from an :init_declarator node.)
 (defn get-init-declarator-name [init-declarator]
+  ;(println "init-declarator: " init-declarator)
+  ; Note that an init declarator could have multiple identifiers
+  ; in it: the one we want is the one in the direct declarator base,
+  ; but there could be others in the parameter list suffix (if there
+  ; is one.)  The node/search function is guaranteed to find the
+  ; one we want because it processes children in order.
   (let [identifier (node/search init-declarator #(= (:symbol %) :identifier))]
+    ;(println "Identifier from init-declarator: " identifier)
     (:value identifier)))
 
 
@@ -1011,7 +1018,8 @@
     #{}
     ; Grab names from the declarators.
     (let [init-declarator-list (node/get-child opt-init-declarator-list 0)]
-      (into #{} (map get-init-declarator-name (node/children init-declarator-list))))))
+      (into #{} (map get-init-declarator-name (filter #(= (:symbol %) :init_declarator)
+                                                      (node/children init-declarator-list)))))))
 
 
 ;; Return set of typedef names found in a declaration ParseResult.
@@ -1030,7 +1038,7 @@
       ; Declaration is not a typedef.
       #{}
       ; Typedef: all of the declarators are typedef names.
-      (find-declarator-names opt-init-declarator-list))))
+      (find-declarator-names opt-init-declarator-list) )))
 
 
 (defn parse-declaration [token-seq ctx]
@@ -1049,7 +1057,14 @@
       ; One or more non-function-definition init declarators
       ; were parsed.  Require a semicolon to terminate the
       ; overall declaration.
-      (p/continue-production pr [(p/expect :semicolon)] ctx))))
+      (let [terminated-pr (p/continue-production pr [(p/expect :semicolon)] ctx)]
+        (do
+          (println (str "Found typedefs: " (find-typedef-names terminated-pr)))
+          terminated-pr
+          )
+        )
+      
+      )))
 
 
 (defn parse-declaration-list [token-seq ctx]
@@ -1143,7 +1158,7 @@
 
 
 (def testprog
-"typedef int foo;
+"typedef int foo, *bar, (*baz)(int);
 
 int main(void) {
     printf(\"Hello, world!\\n\");
