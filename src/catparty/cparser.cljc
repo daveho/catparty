@@ -129,6 +129,19 @@
 (def binop-associativity
   (into {} (map (fn [k] [k :left]) (keys binop-precedence))))
 
+;; "Punctuation" tokens, from lexer
+(def c-punct-tokens (set (map #(second %) cl/c-punct-patterns)))
+
+;; Set of punctuation tokens to discard for AST construction:
+;; everything but ellipsis
+(def c-punct-tokens-discard (disj c-punct-tokens :ellipsis))
+
+;; Node types which should be eliminated from an AST when they
+;; have only one child.
+(def eliminate-when-one-child
+  #{:expression :assignment_expression :conditional_expression
+    :cast_expression :unary_expression :postfix_expression :primary_expression})
+
 
 ;; ----------------------------------------------------------------------
 ;; Forward declarations
@@ -992,8 +1005,72 @@
       (p/continue-production pr [parse-declaration-list] ctx :flatten))))
 
 
+;; Parse specified token sequence as a translation unit,
+;; returning a parse tree.
+;;
+;; Parameters:
+;;   token-seq - input token sequence
+;;
+;; Returns:
+;;   root of parse tree; throws exception if the token sequence is
+;;   not a valid translation unit
+;;
 (defn parse [token-seq]
   (:node (parse-declaration-list token-seq {:allow_func true})))
+
+
+;; Node predicate for determining which node should be
+;; retained in the AST.
+;;
+;; Parameters:
+;;   n - a parse tree Node
+;;
+;; Returns:
+;;   true if the node should be retained in the AST, false if
+;;   it should be discarded
+;;
+(defn c-node-filter [n]
+  (not (contains? c-punct-tokens-discard (:symbol n))))
+
+
+;; Translate tree to get rid of unnecessary one-child nonterminal
+;; nodes.  Used for AST construction.
+;;
+;; Parameters:
+;;   n - a tree node
+;;
+;; Returns:
+;;   simplified tree without the redundant one-child nonterminal nodes
+;;
+(defn simplify-tree [n]
+  (let [sym (:symbol n)
+        nchildren (node/num-children n)]
+    (cond
+      ; Nothing to do if there are no children
+      (= nchildren 0) n
+      
+      ; If there's one child, and the node type is one of the ones
+      ; to eliminate in the one-child case, recur on the child
+      (and (= nchildren 1) (contains? eliminate-when-one-child sym))
+      (recur (node/get-child n 0))
+      
+      ; This node has children, but either it has more than one,
+      ; or it's not one that should be eliminated.  Return a
+      ; translated version in which the simplification is
+      ; performed recursively on the children.
+      :else (node/replace-children n (map simplify-tree (node/children n))))))
+
+
+;; Transform a parse tree into an abstract syntax tree.
+;;
+;; Parameters:
+;;   pt - a parse tree
+;;
+;; Returns:
+;;   an abstract syntax tree
+;;
+(defn to-ast [pt]
+  (simplify-tree (node/filter-tree pt c-node-filter)))
 
 
 ;; ----------------------------------------------------------------------
@@ -1033,37 +1110,5 @@
 (def token-seq (l/token-sequence (cl/create-from-string testprog)))
 (def t (parse token-seq))
 
-;; Create a view of the parse tree in which some nodes are filtered out.
-(def c-punct-tokens (set (map #(second %) cl/c-punct-patterns)))
-(def c-punct-tokens-discard (disj c-punct-tokens :ellipsis))
-(defn c-node-filter [n]
-  (not (contains? c-punct-tokens-discard (:symbol n))))
-
-(def ft (node/filter-tree t c-node-filter))
-
-
-(def eliminate-when-one-child
-  #{:expression :assignment_expression :conditional_expression
-    :cast_expression :unary_expression :postfix_expression :primary_expression})
-
-;; Translate tree to get rid of unnecessary one-child nonterminal
-;; nodes.
-(defn simplify-tree [n]
-  (let [sym (:symbol n)
-        nchildren (node/num-children n)]
-    (cond
-      ; Nothing to do if there are no children
-      (= nchildren 0) n
-      
-      ; If there's one child, and the node type is one of the ones
-      ; to eliminate in the one-child case, recur on the child
-      (and (= nchildren 1) (contains? eliminate-when-one-child sym))
-      (recur (node/get-child n 0))
-      
-      ; This node has children, but either it has more than one,
-      ; or it's not one that should be eliminated.  Return a
-      ; translated version in which the simplification is
-      ; performed recursively on the children.
-      :else (node/replace-children n (map simplify-tree (node/children n))))))
-
-(def sft (simplify-tree ft))
+;; Create AST from the parse tree.
+(def ast (to-ast t))
