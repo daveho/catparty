@@ -18,8 +18,12 @@
 ;; ------------------------------------------------------------
 
 ;; Result of partially or completely applying a production:
-;; a parse node, and a sequence containing the remaining input tokens.
-(defrecord ParseResult [node tokens])
+;; a parse node, a sequence containing the remaining input tokens,
+;; and data resulting from the parse (such as updated symbol
+;; table information.)  Note that data is an empty map
+;; by default, and should be updated explicitly using the update-data
+;; function.
+(defrecord ParseResult [node tokens data])
 
 
 ;; ------------------------------------------------------------
@@ -38,7 +42,7 @@
 ;; symbol and input token sequence.
 ;;
 (defn initial-parse-result [symbol token-seq]
-  (ParseResult. (node/make-node symbol []) token-seq))
+  (ParseResult. (node/make-node symbol []) token-seq {}))
 
 
 ;; Create a parse node for specified token.
@@ -82,7 +86,7 @@
                                                   ", saw "
                                                   (l/get-token-type next-token)) token-seq))
           ; Consume the token and return a ParseResult
-          (ParseResult. (make-terminal-node next-token) (rest token-seq)))))))
+          (ParseResult. (make-terminal-node next-token) (rest token-seq) {}))))))
 
 
 ;; Return a ParseResult with a single node (labeled with
@@ -103,7 +107,7 @@
   ; Function to construct the ParseResult with the children
   ; and remaining tokens.
   (let [make-result (fn [children remaining]
-                      (ParseResult. (node/make-node symbol children) remaining))]
+                      (ParseResult. (node/make-node symbol children) remaining {}))]
     ; Match tokens until either there are no more tokens,
     ; or we encounter a non-matching token.
     (loop [remaining token-seq
@@ -140,7 +144,7 @@
   (let [parent (:node pr)
         child (:node rhs-result)
         remaining-tokens (:tokens rhs-result)]
-    (ParseResult. (node/add-child parent child) remaining-tokens)))
+    (ParseResult. (node/add-child parent child) remaining-tokens {})))
 
 
 ;; Relabel given ParseResult's Node with the specified symbol.
@@ -160,6 +164,19 @@
 ;;
 (defn relabel-parse-result [pr symbol]
   (assoc pr :node (node/relabel (:node pr) symbol)))
+
+
+;; Update specified ParseResult's data.
+;;
+;; Parameters:
+;;   pr - a ParseResult
+;;   updated-data - the updated data
+;;
+;; Returns:
+;;   ParseResult with updated data
+;;
+(defn update-data [pr updated-data]
+  (assoc pr :data updated-data))
 
 
 ;; Flatten a ParseResult by replacing a child node with the
@@ -368,7 +385,7 @@
                 remaining (:tokens rhs-result)]
             ; Combine lhs and rhs and continue parsing at the same precedence level
             (let [n (node/make-node (l/get-token-type op) [(:node lhs-result) (:node rhs-result)])]
-              (recur (ParseResult. n remaining)))))))))
+              (recur (ParseResult. n remaining {})))))))))
 
 
 ;; Parse an infix expression using precedence climbing.
