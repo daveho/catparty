@@ -259,12 +259,4 @@
   (cond
     (pred n) n
     (not (has-children? n)) nil
-    ; FIXME: this seems inelegant
-    :else (loop [kids (children n)]
-            (if (empty? kids)
-              nil
-              (let [kid (first kids)
-                    result (search kid pred)]
-                (if result
-                  result
-                  (recur (rest kids))))))))
+    :else (some identity (map #(search % pred) (children n)))))
