@@ -1038,7 +1038,24 @@
       ; Declaration is not a typedef.
       #{}
       ; Typedef: all of the declarators are typedef names.
-      (find-declarator-names opt-init-declarator-list) )))
+      (find-declarator-names opt-init-declarator-list))))
+
+
+;; Incorporate new typedef names into given ParseResult.
+;;
+;; Parameters:
+;;   pr - a ParseResult
+;;   new-typedef-names - set of typedef names
+;;
+;; Returns:
+;;   ParseResult containing the updated typedef names
+;;
+(defn update-typedef-names [pr new-typedef-names]
+  (let [data (:data pr)
+        current-typedef-names (if (contains? data :typedefs) (:typedefs data) {})
+        updated-typedef-names (set/union current-typedef-names new-typedef-names)
+        updated-data (assoc data :typedefs updated-typedef-names)]
+    (p/update-data pr updated-data)))
 
 
 (defn parse-declaration [token-seq ctx]
@@ -1056,17 +1073,15 @@
       pr
       ; One or more non-function-definition init declarators
       ; were parsed.  Require a semicolon to terminate the
-      ; overall declaration.
-      (let [terminated-pr (p/continue-production pr [(p/expect :semicolon)] ctx)]
-        (do
-          (println (str "Found typedefs: " (find-typedef-names terminated-pr)))
-          terminated-pr
-          )
-        )
-      
-      )))
+      ; overall declaration.  Also, update the ParseResult to
+      ; make a note of any new typedef names.
+      (let [terminated-pr (p/continue-production pr [(p/expect :semicolon)] ctx)
+            new-typedef-names (find-typedef-names terminated-pr)]
+          (println (str "Found typedefs: " new-typedef-names))
+          (update-typedef-names terminated-pr new-typedef-names)))))
 
 
+;; Note: this function is for parsing the overall translation unit.
 (defn parse-declaration-list [token-seq ctx]
   ; Current state is:
   ;   declaration-list -> ^ declaration
@@ -1082,6 +1097,18 @@
       (p/continue-production pr [parse-declaration-list] ctx :flatten))))
 
 
+;; Create an initial parsing context.
+(defn initial-context []
+  {; :allow_func controls whether parse-init-declarator will accept
+   ; a function definition.  True by default (since function definitions
+   ; are permitted in the top level scope.
+   :allow_func true,
+   ; Stack (list) of sets of typedef names.
+   ; The set on top is for the current scope.
+   :typedefs (list #{})
+   })
+
+
 ;; Parse specified token sequence as a translation unit,
 ;; returning a parse tree.
 ;;
@@ -1093,7 +1120,7 @@
 ;;   not a valid translation unit
 ;;
 (defn parse [token-seq]
-  (:node (parse-declaration-list token-seq {:allow_func true})))
+  (:node (parse-declaration-list token-seq (initial-context))))
 
 
 ;; Node predicate for determining which node should be
