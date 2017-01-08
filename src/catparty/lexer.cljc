@@ -121,7 +121,7 @@
 ;; This is the recommended way of using a lexer.
 (defn token-sequence [lexer]
   (if (at-eof lexer)
-    []
+    nil
     (let [first-token (get-current-token lexer)
           advanced-lexer (consume-token lexer)]
       (cons first-token (lazy-seq (token-sequence advanced-lexer))))))
@@ -210,6 +210,32 @@
 ;;
 (defn get-token-type [token]
   (second token))
+
+
+;; Get the lexeme for specified token.
+;;
+;; Parameters:
+;;   token - a token
+;;
+;; Returns:
+;;   the lexeme
+;;
+(defn get-lexeme [token]
+  (first token))
+
+
+;; Update the token type of specified token.
+;;
+;; Parameters:
+;;   token - a token
+;;   updated-token-type - the updated token type
+;;
+;; Returns:
+;;   token with updated token type
+;;
+(defn update-token-type [token updated-token-type]
+  (let [[lexeme token-type lnum cnum] token]
+    [lexeme updated-token-type lnum cnum]))
 
 
 ;; Make a predicate function testing whether a token's type

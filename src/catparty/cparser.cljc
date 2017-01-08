@@ -257,6 +257,58 @@
 
 
 ;; ----------------------------------------------------------------------
+;; Typedef name handling
+;; ----------------------------------------------------------------------
+
+;; Translate given token to take typedef names into account.
+;; An :identifier token whose lexeme matches a typedef name will
+;; have its token type changed to :typedef_name.  Also,
+;; a :typedef_name token whose lexeme is *not* in the set of
+;; typedef names will be changed back to :identifier.
+;; The latter case is important because chunked lazy evaluation
+;; of the translated input token sequence could actually
+;; convert identifiers to typedef names beyond the scope
+;; of the typedef (i.e., if the eager evaluation goes beyond
+;; a right brace.)
+;;
+;; Parameters:
+;;   tok - a token
+;;   typedef-names - set of typedef names in current scope
+;;
+;; Returns:
+;;   translated token (converting identifiers to typedef names and
+;;   typedef names to identifiers as appropriate)
+;;
+(defn translate-token [tok typedef-names]
+  (let [[lexeme token-type] tok]
+    (cond
+      (and (= token-type :identifier) (contains? typedef-names lexeme))
+      (l/update-token-type tok :typedef_name)
+      
+      (and (= token-type :typedef_name) (not (contains? typedef-names lexeme)))
+      (l/update-token-type tok :identifier)
+      
+      :else tok)))
+
+
+;; Translate all tokens in a token sequence to distinguish identifiers
+;; from typedef names according to the specified set of typedef names.
+;;
+;; Parameters:
+;;   token-seq - token sequence
+;;   typedef-names - set of typedef names
+;;
+;; Returns:
+;;   sequence of tokens in which typedef names are marked as :typedef_name
+;;
+(defn translate-token-seq [token-seq typedef-names]
+  (if (empty? token-seq)
+    nil
+    (cons (translate-token (first token-seq) typedef-names)
+          (lazy-seq (translate-token-seq (rest token-seq) typedef-names)))))
+
+  
+;; ----------------------------------------------------------------------
 ;; Parsing functions
 ;; ----------------------------------------------------------------------
 
