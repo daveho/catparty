@@ -203,6 +203,21 @@
     (into sanitized-context (map vector allowed (repeat true)))))
 
 
+;; ----------------------------------------------------------------------
+;; Typedef name handling
+;; ----------------------------------------------------------------------
+
+;; These routines deal with both the parsing context and
+;; ParseResults.
+;;
+;; ParseResults only store typedef names in order to *return*
+;; them from parse-declaration.
+;;
+;; The typedef names in the parsing context are the ones that
+;; are actually used to determine which identifiers are
+;; typedef names.
+
+
 ;; Enter a new scope for typedef names.
 ;; All of the typedef names in the current scope are visible in the
 ;; new scope.
@@ -219,46 +234,6 @@
     ; in the new scope.
     (assoc ctx :typedefs (cons (first typedef-stack) typedef-stack))))
 
-
-;; Update typedef names in context with the ones in the
-;; specified ParseResult.
-;;
-;; Parameters:
-;;   ctx - parsing context
-;;   pr - a ParseResult with (potentially) new typedef names
-;;
-;; Returns:
-;;   updated parsing context
-;;
-(defn update-context-typedef-names [ctx pr]
-  ; See if there actually are any typedef names in the ParseResult.
-  (if (nil? (:typedefs (:data pr)))
-    ; No typedef names in ParseResult, so context doesn't change.
-    ctx
-    ; Add all of ParseResult's typedef names to the
-    ; typedef names in the context's topmost scope.
-    (let [typedef-stack (:typedefs ctx)
-          top (first typedef-stack)
-          updated-typedef-names (set/union top (:typedefs (:data pr)))
-          updated-typedef-stack (cons updated-typedef-names (rest typedef-stack))]
-      (assoc ctx :typedefs updated-typedef-stack))))
-
-
-;; Get the typedef names in the current (topmost) scope.
-;;
-;; Parameters:
-;;   ctx - the parsing context
-;;
-;; Returns:
-;;   set of typedef names in the current scope
-;;
-(defn get-context-typedef-names [ctx]
-  (first (:typedefs ctx)))
-
-
-;; ----------------------------------------------------------------------
-;; Typedef name handling
-;; ----------------------------------------------------------------------
 
 ;; Translate given token to take typedef names into account.
 ;; An :identifier token whose lexeme matches a typedef name will
@@ -306,6 +281,45 @@
     nil
     (cons (translate-token (first token-seq) typedef-names)
           (lazy-seq (translate-token-seq (rest token-seq) typedef-names)))))
+
+
+;; Incorporate typedef names from specified ParseResult into
+;; the current scope of the parsing context, producing
+;; an updated parsing context and an updated ParseResult
+;; in which the token sequence has typedef names translated.
+;; This function is used when a declaration just parsed
+;; may have introduced new typedef names that need to be
+;; recognized for subsequent declarations and statements
+;; in the current scope.
+;;
+;; Parameters:
+;;   ctx - current parsing context
+;;   pr - ParseResult that may have new typedef names
+;;
+;; Returns:
+;;   two-element vector in which the first element is an updated
+;;   parsing context and the second element is an updated
+;;   ParseResult with typedef names (including the new ones)
+;;   correctly accounted for in its token sequence, the idea being
+;;   that the updated ParseResult will be used to continue
+;;   a production recursively with p/continue-production
+;;
+(defn update-typedefs [ctx pr]
+  (let [current-typedefs (first (:typedefs ctx))
+        maybe-new-typedefs (:typedefs (:data pr))]
+    ; See if there are any new typedefs that aren't yet in the
+    ; parsing context.
+    (if (empty? (set/difference maybe-new-typedefs current-typedefs))
+      ; There are no new typedefs,
+      ; so nothing needs to be done to either the parsing context
+      ; or the ParseResult.
+      [ctx pr]
+      ; There are new typedefs.
+      ; Update the parsing context and the ParseResult appropriately.
+      (let [updated-typedefs (set/union current-typedefs maybe-new-typedefs)
+            updated-context (assoc ctx :typedefs (cons updated-typedefs (rest (:typedefs ctx))))
+            updated-pr (p/update-tokens pr (translate-token-seq (:tokens pr) updated-typedefs))]
+        [updated-context updated-pr]))))
 
   
 ;; ----------------------------------------------------------------------
@@ -965,9 +979,9 @@
       ; end of block item list
       pr
       ; There is at least one more block item.
-      ; Update typedef names in context.
-      (let [ctx2 (update-context-typedef-names ctx pr)]
-        (p/continue-production pr [parse-block-item-list] ctx :flatten)))))
+      ; Update typedef names in context and ParseResult.
+      (let [[ctx2 pr2] (update-typedefs ctx pr)]
+        (p/continue-production pr2 [parse-block-item-list] ctx2 :flatten)))))
 
 
 (defn parse-opt-block-item-list [token-seq ctx]
@@ -1184,7 +1198,7 @@
 ;; Returns:
 ;;   ParseResult containing the updated typedef names
 ;;
-(defn update-typedef-names [pr new-typedef-names]
+(defn update-parse-result-typedef-names [pr new-typedef-names]
   (let [data (:data pr)
         current-typedef-names (if (contains? data :typedefs) (:typedefs data) {})
         updated-typedef-names (set/union current-typedef-names new-typedef-names)
@@ -1212,7 +1226,7 @@
       (let [terminated-pr (p/continue-production pr [(p/expect :semicolon)] ctx)
             new-typedef-names (find-typedef-names terminated-pr)]
           (println (str "Found typedefs: " new-typedef-names))
-          (update-typedef-names terminated-pr new-typedef-names)))))
+          (update-parse-result-typedef-names terminated-pr new-typedef-names)))))
 
 
 ;; Note: this function is for parsing the overall translation unit.
@@ -1230,8 +1244,8 @@
       ; Declaration list continues.
       ; Note that we update the context with any new typedef names
       ; seen in the declaration just parsed.
-      (let [ctx2 (update-context-typedef-names ctx pr)]
-        (p/continue-production pr [parse-declaration-list] ctx2 :flatten)))))
+      (let [[ctx2 pr2] (update-typedefs ctx pr)]
+        (p/continue-production pr2 [parse-declaration-list] ctx2 :flatten)))))
 
 
 ;; Parse specified token sequence as a translation unit,

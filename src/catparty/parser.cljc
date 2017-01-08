@@ -179,6 +179,21 @@
   (assoc pr :data updated-data))
 
 
+;; Update token sequence in specified ParseResult.
+;; This is useful for, e.g., incorporating symbol table feedback
+;; into the lexical analysis results.
+;;
+;; Parameters:
+;;   pr - a ParseResult
+;;   updated-token-seq - updated token sequence
+;;
+;; Returns:
+;;   ParseResult with replaced token sequence
+;;
+(defn update-tokens [pr updated-token-seq]
+  (assoc pr :tokens updated-token-seq))
+
+
 ;; Flatten a ParseResult by replacing a child node with the
 ;; same symbol as the top-level node with the (recursive)
 ;; child's children.
