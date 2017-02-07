@@ -32,28 +32,21 @@
 (def storage-class-specifier-tokens
   #{:kw_typedef :kw_extern :kw_static :kw_auto :kw_register})
 
-; Single-token type specifiers: excludes typedef names and
-; struct/union types.
+; Single-token type specifiers: excludes struct/union types.
 (def type-specifier-tokens
-  #{:kw_void :kw_char :kw_short :kw_int :kw_long :kw_float :kw_double :kw_signed :kw_unsigned})
+  #{:kw_void :kw_char :kw_short :kw_int :kw_long :kw_float :kw_double :kw_signed :kw_unsigned
+    :typedef_name})
 
 (def type-qualifier-tokens
   #{:kw_const :kw_restrict :kw_volatile})
 
 ;; Tokens that can start a type specifier.
-;; FIXME: does not handle typedef names
 (def type-specifier-start-tokens
   (set/union type-specifier-tokens #{:kw_struct :kw_union}))
 
 ;; Tokens that can start a type specifier or qualifier.
-;; FIXME: does not handle typedef names
 (def type-specifier-or-qualifier-start-tokens
   (set/union type-qualifier-tokens type-specifier-start-tokens))
-
-;; Single token declaration specifiers.
-;; Note that these do not include typedef names and
-;; struct/union types.
-;(def declaration-specifiers (set/union storage-class-specifiers type-specifiers type-qualifiers))
 
 ;; Set of tokens that can begin a declarator
 (def declarator-start-tokens
@@ -86,7 +79,6 @@
   (set/union #{:lbracket :lparen :dot :op_arrow} inc-dec-operators))
 
 ;; Tokens that can start a declaration.
-;; FIXME: need to handle typedef names.
 (def declaration-start-tokens
   (set/union storage-class-specifier-tokens
              type-specifier-tokens
@@ -326,10 +318,10 @@
 ;; Parsing functions
 ;; ----------------------------------------------------------------------
 
-
+;; Token predicate matching literals.
 (def is-literal? (l/make-token-type-pred literals))
 
-;; FIXME: this needs to handle typedef names
+;; Token predicate for testing whether a token is the start of a declaration.
 (def is-declaration-start? (l/make-token-type-pred declaration-start-tokens))
 
 
@@ -536,9 +528,7 @@
       )))
 
 
-;; FIXME: does not handle
-;;   - typedef name
-;;   - enum specifier
+;; FIXME: does not handle enum specifier
 (defn parse-specifier-qualifier-list [token-seq ctx]
   ; Current state is:
   ;    specifier-qualifier-list -> ^ type-specifier
@@ -811,15 +801,17 @@
       pr)))
 
 
-;; FIXME: productions should be (from ANTLR 3 grammar)
+;; Productions should be (from ANTLR 3 grammar)
 ;; declarator_suffix
 ;;     :   '[' constant_expression ']'
 ;;     |   '[' ']'
 ;;     |   '(' parameter_type_list ')'
-;;     |   '(' identifier_list ')'          -- old style C, won't support this for now?
-;;     |   '(' ')'                          -- old style C, won't support this for now?
+;;     |   '(' identifier_list ')'          -- old style C function declaration
+;;     |   '(' ')'                          -- old style C function declaration
 ;; 	;
-;; This looks doable with 2 tokens of lookahead.
+;;
+;; We don't support old-style function declarations,
+;; and probably never will
 ;; 
 (defn parse-declarator-suffix [token-seq ctx]
   (cond
