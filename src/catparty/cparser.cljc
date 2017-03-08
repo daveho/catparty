@@ -278,7 +278,7 @@
 ;; Get typedefs from specified ParseResult.
 ;; Returns empty set if the ParseResult has no typedefs.
 (defn get-typedefs-from-parse-result [pr]
-  (or (node/get-prop (:node pr) :typedefs) {}))
+  (or (node/get-prop (:node pr) :typedefs) #{}))
 
 
 ;; Incorporate typedef names from specified ParseResult into
@@ -335,7 +335,7 @@
 (defn propagate-typedefs-from-child [pr]
   (let [n (:node pr)
         child (node/get-child n 0)]
-    (println "Child typedefs: " (node/get-prop child :typedefs))
+    (println "Child typedefs: " (or (node/get-prop child :typedefs) #{}))
     (p/add-node-props pr (node/get-props child))))
 
   
