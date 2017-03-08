@@ -278,7 +278,7 @@
 ;; Get typedefs from specified ParseResult.
 ;; Returns empty set if the ParseResult has no typedefs.
 (defn get-typedefs-from-parse-result [pr]
-  (or (:typedefs (:data pr)) #{}))
+  (or (node/get-prop (:node pr) :typedefs) {}))
 
 
 ;; Incorporate typedef names from specified ParseResult into
@@ -1197,11 +1197,9 @@
 ;;   ParseResult containing the updated typedef names
 ;;
 (defn update-parse-result-typedef-names [pr new-typedef-names]
-  (let [data (:data pr)
-        current-typedef-names (get-typedefs-from-parse-result pr)
-        updated-typedef-names (set/union current-typedef-names new-typedef-names)
-        updated-data (assoc data :typedefs updated-typedef-names)]
-    (p/update-data pr updated-data)))
+  (let [current-typedef-names (get-typedefs-from-parse-result pr)
+        updated-typedef-names (set/union current-typedef-names new-typedef-names)]
+    (p/add-node-props pr {:typedefs updated-typedef-names})))
 
 
 (defn parse-declaration [token-seq ctx]

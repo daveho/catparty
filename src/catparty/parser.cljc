@@ -166,6 +166,19 @@
   (assoc pr :node (node/relabel (:node pr) symbol)))
 
 
+;; Add specified properties to given ParseResult's node.
+;;
+;; Parameters:
+;;   pr - a ParseResult
+;;   props - properties (map) to add to the ParseResult's node
+;;
+;; Returns:
+;;   ParseResult where the specified node properties have been added
+;;
+(defn add-node-props [pr props]
+  (assoc pr :node (node/add-props (:node pr) props)))
+
+
 ;; Update specified ParseResult's data.
 ;;
 ;; Parameters:
