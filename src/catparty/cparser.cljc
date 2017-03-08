@@ -275,6 +275,12 @@
           (lazy-seq (translate-token-seq (rest token-seq) typedef-names)))))
 
 
+;; Get typedefs from specified ParseResult.
+;; Returns empty set if the ParseResult has no typedefs.
+(defn get-typedefs-from-parse-result [pr]
+  (or (:typedefs (:data pr)) #{}))
+
+
 ;; Incorporate typedef names from specified ParseResult into
 ;; the current scope of the parsing context, producing
 ;; an updated parsing context and an updated ParseResult
@@ -298,7 +304,7 @@
 ;;
 (defn update-typedefs [ctx pr]
   (let [current-typedefs (first (:typedefs ctx))
-        maybe-new-typedefs (:typedefs (:data pr))]
+        maybe-new-typedefs (get-typedefs-from-parse-result pr)]
     ; See if there are any new typedefs that aren't yet in the
     ; parsing context.
     (if (empty? (set/difference maybe-new-typedefs current-typedefs))
@@ -1192,7 +1198,7 @@
 ;;
 (defn update-parse-result-typedef-names [pr new-typedef-names]
   (let [data (:data pr)
-        current-typedef-names (if (contains? data :typedefs) (:typedefs data) {})
+        current-typedef-names (get-typedefs-from-parse-result pr)
         updated-typedef-names (set/union current-typedef-names new-typedef-names)
         updated-data (assoc data :typedefs updated-typedef-names)]
     (p/update-data pr updated-data)))
