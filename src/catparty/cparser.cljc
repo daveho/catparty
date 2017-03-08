@@ -319,6 +319,25 @@
             updated-pr (p/update-tokens pr (translate-token-seq (:tokens pr) updated-typedefs))]
         [updated-context updated-pr]))))
 
+
+;; Propagate typedefs in a ParseResult from the first child
+;; to the parent.  This is useful for, e.g.,
+;; the block-item -> declaration production.
+;;
+;; Parameters:
+;;   pr - a ParseResult where the first child of the Node
+;;        has typedefs which should be propagated to the
+;;        parent
+;;
+;; Returns:
+;;   updated ParseResult with typedef names propagated to the parent Node
+;;
+(defn propagate-typedefs-from-child [pr]
+  (let [n (:node pr)
+        child (node/get-child n 0)]
+    (println "Child typedefs: " (node/get-prop child :typedefs))
+    (p/add-node-props pr (node/get-props child))))
+
   
 ;; ----------------------------------------------------------------------
 ;; Parsing functions
@@ -966,7 +985,7 @@
 ;; of allowing declarations and statements to appear in any order.)
 (defn parse-block-item [token-seq ctx]
   (if (l/next-token-matches? token-seq is-declaration-start?)
-    (p/do-production :block_item [parse-declaration] token-seq ctx)
+    (propagate-typedefs-from-child (p/do-production :block_item [parse-declaration] token-seq ctx))
     (p/do-production :block_item [parse-statement] token-seq ctx)))
 
 
@@ -1231,7 +1250,7 @@
   ;   declaration-list -> ^ declaration
   ;   declaration-list -> ^ declaration declaration-list
   ; Start by parsing just a declaration.
-  (let [pr (p/do-production :declaration_list [parse-declaration] token-seq ctx)
+  (let [pr (propagate-typedefs-from-child (p/do-production :declaration_list [parse-declaration] token-seq ctx))
         remaining (:tokens pr)]
     ; See if declaration list continues.
     (if (empty? remaining)
@@ -1323,6 +1342,8 @@
 "typedef int foo, *bar, (*baz)(int);
 
 int main(void) {
+    foo x;
+
     printf(\"Hello, world!\\n\");
 }"
 )

@@ -180,6 +180,18 @@
   (get (:props node) prop))
 
 
+;; Get all properties from specified node.
+;;
+;; Parameters:
+;;   node - a node
+;;
+;; Returns:
+;;   properties (map of property names to their values)
+;;
+(defn get-props [node]
+  (:props node))
+
+
 ;; Find the node specified by given path.
 ;; If no such node exists, return false.
 ;; Otherwise, return nil.
